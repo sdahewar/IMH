@@ -2,6 +2,11 @@
 IndiaMART Insights Engine - GUI Application
 Simple Python GUI using Tkinter for transcript analysis
 
+Features:
+- Input: Text transcript OR Audio file (Vosk STT)
+- Analysis: NVIDIA NIM LLM insights extraction
+- Batch: Multiple transcripts or audio files
+
 Run with: python gui_app.py
 """
 
@@ -25,7 +30,7 @@ class InsightsEngineGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("IndiaMART Insights Engine")
-        self.root.geometry("1200x800")
+        self.root.geometry("1200x850")
         self.root.configure(bg='#1a1a2e')
         
         # Data
@@ -33,6 +38,7 @@ class InsightsEngineGUI:
         self.insights_agent = None
         self.aggregation_agent = None
         self.current_result = None
+        self.vosk_stt = None  # Will be loaded on demand
         
         # Style configuration
         self.setup_styles()
@@ -112,7 +118,7 @@ class InsightsEngineGUI:
         title.pack(side='left')
         
         subtitle = ttk.Label(header_frame,
-                            text=f"Powered by NVIDIA NIM ({NVIDIA_MODEL})",
+                            text=f"Vosk STT + NVIDIA NIM ({NVIDIA_MODEL})",
                             style='SubHeader.TLabel')
         subtitle.pack(side='left', padx=20, pady=5)
         
@@ -128,8 +134,8 @@ class InsightsEngineGUI:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill='both', expand=True, padx=20, pady=10)
         
-        # Tab 1: Single Transcript Analysis
-        self.create_single_transcript_tab()
+        # Tab 1: Single Analysis (Text or Audio)
+        self.create_single_analysis_tab()
         
         # Tab 2: Batch Analysis
         self.create_batch_analysis_tab()
@@ -137,20 +143,36 @@ class InsightsEngineGUI:
         # Tab 3: Results View
         self.create_results_tab()
     
-    def create_single_transcript_tab(self):
-        """Create single transcript analysis tab"""
+    def create_single_analysis_tab(self):
+        """Create single transcript/audio analysis tab"""
         tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="📝 Single Transcript")
+        self.notebook.add(tab, text="📝 Single Analysis")
         
         # Left panel - Input
-        left_frame = ttk.LabelFrame(tab, text="Input Transcript", padding=10)
+        left_frame = ttk.LabelFrame(tab, text="Input (Text or Audio)", padding=10)
         left_frame.pack(side='left', fill='both', expand=True, padx=10, pady=10)
         
-        # Transcript input
+        # Input type selection
+        input_type_frame = ttk.Frame(left_frame)
+        input_type_frame.pack(fill='x', pady=5)
+        
+        self.input_type_var = tk.StringVar(value="text")
+        
+        ttk.Radiobutton(input_type_frame, text="📝 Text Transcript", 
+                       variable=self.input_type_var, value="text",
+                       command=self.toggle_input_type).pack(side='left', padx=10)
+        ttk.Radiobutton(input_type_frame, text="🎤 Audio File", 
+                       variable=self.input_type_var, value="audio",
+                       command=self.toggle_input_type).pack(side='left', padx=10)
+        
+        # Text input frame
+        self.text_input_frame = ttk.Frame(left_frame)
+        self.text_input_frame.pack(fill='both', expand=True, pady=5)
+        
         self.transcript_input = scrolledtext.ScrolledText(
-            left_frame, 
+            self.text_input_frame, 
             width=50, 
-            height=20,
+            height=15,
             font=('Consolas', 10),
             bg='#16213e',
             fg='#eaeaea',
@@ -159,6 +181,50 @@ class InsightsEngineGUI:
         self.transcript_input.pack(fill='both', expand=True)
         self.transcript_input.insert('1.0', 'Paste your transcript here...')
         self.transcript_input.bind('<FocusIn>', self.clear_placeholder)
+        
+        # Audio input frame (initially hidden)
+        self.audio_input_frame = ttk.Frame(left_frame)
+        
+        # Audio file selection
+        audio_file_frame = ttk.Frame(self.audio_input_frame)
+        audio_file_frame.pack(fill='x', pady=10)
+        
+        self.audio_path_var = tk.StringVar(value="No audio file selected")
+        ttk.Label(audio_file_frame, text="🎤 Audio File:").pack(side='left')
+        ttk.Label(audio_file_frame, textvariable=self.audio_path_var, 
+                 foreground='#a0a0a0').pack(side='left', padx=10)
+        ttk.Button(audio_file_frame, text="Browse...", 
+                  command=self.browse_audio_file).pack(side='right')
+        
+        # Audio info
+        self.audio_info_label = ttk.Label(self.audio_input_frame, 
+                                         text="Supported formats: MP3, WAV, M4A, OGG",
+                                         foreground='#a0a0a0')
+        self.audio_info_label.pack(anchor='w', pady=5)
+        
+        # STT status
+        self.stt_status_label = ttk.Label(self.audio_input_frame, 
+                                         text="🔊 Vosk STT: Ready (vosk-model-hi-0.22)",
+                                         foreground='#00d26a')
+        self.stt_status_label.pack(anchor='w', pady=5)
+        
+        # Transcribed text preview
+        ttk.Label(self.audio_input_frame, text="📝 Transcribed Text (Preview):").pack(anchor='w', pady=(10, 0))
+        self.transcribed_preview = scrolledtext.ScrolledText(
+            self.audio_input_frame,
+            width=50,
+            height=10,
+            font=('Consolas', 9),
+            bg='#16213e',
+            fg='#eaeaea',
+            state='disabled'
+        )
+        self.transcribed_preview.pack(fill='both', expand=True, pady=5)
+        
+        # Transcribe button
+        self.transcribe_btn = ttk.Button(self.audio_input_frame, text="🎤 Transcribe Audio",
+                                        command=self.transcribe_audio)
+        self.transcribe_btn.pack(pady=5)
         
         # Metadata frame
         meta_frame = ttk.Frame(left_frame)
@@ -176,8 +242,8 @@ class InsightsEngineGUI:
         city_entry.pack(side='left', padx=5)
         
         # Analyze button
-        analyze_btn = ttk.Button(left_frame, text="🔍 Analyze Transcript", 
-                                command=self.analyze_single_transcript)
+        analyze_btn = ttk.Button(left_frame, text="🔍 Analyze with LLM", 
+                                command=self.analyze_input)
         analyze_btn.pack(pady=10)
         
         # Right panel - Results
@@ -207,6 +273,155 @@ class InsightsEngineGUI:
         ask_btn = ttk.Button(q_frame, text="Ask", command=self.ask_question)
         ask_btn.pack(side='left', padx=5)
     
+    def toggle_input_type(self):
+        """Toggle between text and audio input"""
+        input_type = self.input_type_var.get()
+        
+        if input_type == "text":
+            self.audio_input_frame.pack_forget()
+            self.text_input_frame.pack(fill='both', expand=True, pady=5)
+        else:
+            self.text_input_frame.pack_forget()
+            self.audio_input_frame.pack(fill='both', expand=True, pady=5)
+    
+    def browse_audio_file(self):
+        """Browse for audio file"""
+        filepath = filedialog.askopenfilename(
+            filetypes=[
+                ("Audio files", "*.mp3 *.wav *.m4a *.ogg *.flac"),
+                ("MP3 files", "*.mp3"),
+                ("WAV files", "*.wav"),
+                ("All files", "*.*")
+            ]
+        )
+        if filepath:
+            self.audio_path_var.set(os.path.basename(filepath))
+            self.selected_audio_path = filepath
+            self.update_status(f"Audio file selected: {os.path.basename(filepath)}")
+    
+    def get_vosk_stt(self):
+        """Initialize Vosk STT on demand"""
+        if self.vosk_stt is None:
+            try:
+                from src.stt import VoskSTT
+                self.stt_status_label.config(text="⏳ Loading Vosk model...", foreground='#ffc107')
+                self.root.update_idletasks()
+                
+                self.vosk_stt = VoskSTT(model_path="vosk-model-hi-0.22", verbose=False)
+                self.stt_status_label.config(text="✅ Vosk STT: Ready", foreground='#00d26a')
+            except Exception as e:
+                self.stt_status_label.config(text=f"❌ Vosk error: {str(e)}", foreground='#dc3545')
+                return None
+        return self.vosk_stt
+    
+    def transcribe_audio(self):
+        """Transcribe audio file using Vosk"""
+        if not hasattr(self, 'selected_audio_path') or not self.selected_audio_path:
+            messagebox.showwarning("Warning", "Please select an audio file first")
+            return
+        
+        self.update_status("Transcribing audio...")
+        self.transcribe_btn.config(state='disabled')
+        
+        # Enable and clear preview
+        self.transcribed_preview.config(state='normal')
+        self.transcribed_preview.delete('1.0', 'end')
+        self.transcribed_preview.insert('end', "🔄 Transcribing audio...\n\nPlease wait, this may take a moment.")
+        self.transcribed_preview.config(state='disabled')
+        self.root.update_idletasks()
+        
+        def transcribe():
+            try:
+                stt = self.get_vosk_stt()
+                if stt is None:
+                    self.root.after(0, lambda: messagebox.showerror("Error", "Failed to load Vosk STT"))
+                    return
+                
+                result = stt.transcribe(self.selected_audio_path)
+                transcript = result.get('transcript', '')
+                duration = result.get('duration', 0)
+                
+                self.current_transcript = transcript
+                
+                # Update preview
+                def update_preview():
+                    self.transcribed_preview.config(state='normal')
+                    self.transcribed_preview.delete('1.0', 'end')
+                    self.transcribed_preview.insert('end', f"Duration: {duration:.1f}s\n\n{transcript}")
+                    self.transcribed_preview.config(state='disabled')
+                    self.transcribe_btn.config(state='normal')
+                    self.update_status(f"Transcription complete: {len(transcript)} characters")
+                
+                self.root.after(0, update_preview)
+                
+            except Exception as e:
+                self.root.after(0, lambda: self.transcribed_preview.config(state='normal'))
+                self.root.after(0, lambda: self.transcribed_preview.delete('1.0', 'end'))
+                self.root.after(0, lambda: self.transcribed_preview.insert('end', f"❌ Error: {str(e)}"))
+                self.root.after(0, lambda: self.transcribed_preview.config(state='disabled'))
+                self.root.after(0, lambda: self.transcribe_btn.config(state='normal'))
+                self.root.after(0, lambda: self.update_status(f"Error: {str(e)}"))
+        
+        threading.Thread(target=transcribe, daemon=True).start()
+    
+    def analyze_input(self):
+        """Analyze either text or audio input"""
+        input_type = self.input_type_var.get()
+        
+        if input_type == "text":
+            self.analyze_text_transcript()
+        else:
+            self.analyze_audio_transcript()
+    
+    def analyze_text_transcript(self):
+        """Analyze text transcript"""
+        transcript = self.transcript_input.get('1.0', 'end-1c').strip()
+        
+        if not transcript or transcript == 'Paste your transcript here...':
+            messagebox.showwarning("Warning", "Please enter a transcript to analyze")
+            return
+        
+        self.current_transcript = transcript
+        self.run_llm_analysis(transcript)
+    
+    def analyze_audio_transcript(self):
+        """Analyze transcribed audio"""
+        if not hasattr(self, 'current_transcript') or not self.current_transcript:
+            messagebox.showwarning("Warning", "Please transcribe an audio file first")
+            return
+        
+        self.run_llm_analysis(self.current_transcript)
+    
+    def run_llm_analysis(self, transcript):
+        """Run LLM analysis on transcript"""
+        if self.insights_agent is None:
+            messagebox.showerror("Error", "Agent not initialized. Please wait for data to load.")
+            return
+        
+        self.update_status("Analyzing with LLM...")
+        self.single_result_text.delete('1.0', 'end')
+        self.single_result_text.insert('end', "🔄 Analyzing transcript with NVIDIA NIM...\n\n")
+        self.root.update_idletasks()
+        
+        def analyze():
+            metadata = {
+                'customer_type': self.cust_type_var.get(),
+                'city': self.city_var.get()
+            }
+            
+            try:
+                result = self.insights_agent.analyze_transcript(transcript, metadata)
+                self.current_result = result
+                
+                self.root.after(0, lambda: self.display_single_result(result))
+                self.root.after(0, lambda: self.update_status("Analysis complete"))
+                
+            except Exception as e:
+                self.root.after(0, lambda: self.single_result_text.insert('end', f"\n❌ Error: {str(e)}"))
+                self.root.after(0, lambda: self.update_status(f"Error: {str(e)}"))
+        
+        threading.Thread(target=analyze, daemon=True).start()
+    
     def create_batch_analysis_tab(self):
         """Create batch analysis tab"""
         tab = ttk.Frame(self.notebook)
@@ -224,17 +439,20 @@ class InsightsEngineGUI:
         source_frame = ttk.LabelFrame(left_frame, text="📥 Input Source", padding=10)
         source_frame.pack(fill='x', padx=5, pady=5)
         
-        self.input_source_var = tk.StringVar(value="dataset")
+        self.batch_source_var = tk.StringVar(value="dataset")
         
         ttk.Radiobutton(source_frame, text="From Loaded Dataset", 
-                       variable=self.input_source_var, value="dataset",
-                       command=self.toggle_input_source).pack(anchor='w')
+                       variable=self.batch_source_var, value="dataset",
+                       command=self.toggle_batch_source).pack(anchor='w')
         ttk.Radiobutton(source_frame, text="Paste Multiple Transcripts", 
-                       variable=self.input_source_var, value="paste",
-                       command=self.toggle_input_source).pack(anchor='w')
+                       variable=self.batch_source_var, value="paste",
+                       command=self.toggle_batch_source).pack(anchor='w')
         ttk.Radiobutton(source_frame, text="Load from CSV File", 
-                       variable=self.input_source_var, value="file",
-                       command=self.toggle_input_source).pack(anchor='w')
+                       variable=self.batch_source_var, value="file",
+                       command=self.toggle_batch_source).pack(anchor='w')
+        ttk.Radiobutton(source_frame, text="🎤 Audio Folder", 
+                       variable=self.batch_source_var, value="audio_folder",
+                       command=self.toggle_batch_source).pack(anchor='w')
         
         # Dataset options frame
         self.dataset_options_frame = ttk.LabelFrame(left_frame, text="📊 Dataset Options", padding=10)
@@ -303,6 +521,18 @@ Transcript 3 content here...""")
         
         ttk.Label(self.file_frame, text="CSV should have a 'transcript' column").pack(anchor='w')
         
+        # Audio folder frame (initially hidden)
+        self.audio_folder_frame = ttk.LabelFrame(left_frame, text="🎤 Audio Folder", padding=10)
+        
+        audio_folder_btn_frame = ttk.Frame(self.audio_folder_frame)
+        audio_folder_btn_frame.pack(fill='x', pady=5)
+        
+        self.audio_folder_var = tk.StringVar(value="No folder selected")
+        ttk.Label(audio_folder_btn_frame, textvariable=self.audio_folder_var).pack(side='left')
+        ttk.Button(audio_folder_btn_frame, text="Browse...", command=self.browse_audio_folder).pack(side='right')
+        
+        ttk.Label(self.audio_folder_frame, text="Process all .mp3/.wav files in folder").pack(anchor='w')
+        
         # Run button frame
         run_frame = ttk.Frame(left_frame)
         run_frame.pack(fill='x', padx=5, pady=10)
@@ -335,33 +565,37 @@ Transcript 3 content here...""")
         )
         self.batch_result_text.pack(fill='both', expand=True)
     
-    def toggle_input_source(self):
-        """Toggle between input source options"""
-        source = self.input_source_var.get()
+    def toggle_batch_source(self):
+        """Toggle between batch input source options"""
+        source = self.batch_source_var.get()
         
         # Hide all optional frames
-        try:
-            self.paste_frame.pack_forget()
-        except:
-            pass
-        try:
-            self.file_frame.pack_forget()
-        except:
-            pass
-        try:
-            self.dataset_options_frame.pack_forget()
-        except:
-            pass
+        for frame in [self.paste_frame, self.file_frame, self.dataset_options_frame, self.audio_folder_frame]:
+            try:
+                frame.pack_forget()
+            except:
+                pass
         
-        # Show appropriate frame - find the parent's children to place after source_frame
-        parent = self.dataset_options_frame.master
-        
+        # Show appropriate frame
         if source == "dataset":
             self.dataset_options_frame.pack(fill='x', padx=5, pady=5)
         elif source == "paste":
             self.paste_frame.pack(fill='both', expand=True, padx=5, pady=5)
         elif source == "file":
             self.file_frame.pack(fill='x', padx=5, pady=5)
+        elif source == "audio_folder":
+            self.audio_folder_frame.pack(fill='x', padx=5, pady=5)
+    
+    def browse_audio_folder(self):
+        """Browse for audio folder"""
+        folder = filedialog.askdirectory()
+        if folder:
+            self.audio_folder_var.set(folder)
+            self.selected_audio_folder = folder
+            
+            # Count audio files
+            audio_files = [f for f in os.listdir(folder) if f.endswith(('.mp3', '.wav', '.m4a', '.ogg'))]
+            self.update_status(f"Found {len(audio_files)} audio files in folder")
     
     def browse_transcript_file(self):
         """Browse for a transcript file"""
@@ -373,7 +607,7 @@ Transcript 3 content here...""")
             ]
         )
         if filepath:
-            self.file_path_var.set(filepath)
+            self.file_path_var.set(os.path.basename(filepath))
             self.loaded_file_path = filepath
     
     def create_results_tab(self):
@@ -454,12 +688,23 @@ Transcript 3 content here...""")
                 # Refresh results list
                 self.refresh_results_list()
             else:
-                self.data_label.config(text="❌ Data not found")
-                self.update_status("Error: Could not load data file")
+                self.data_label.config(text="⚠️ No dataset (standalone mode)")
+                self.update_status("Running in standalone mode")
+                
+                # Still initialize agents
+                self.insights_agent = InsightsAgent(verbose=False)
+                self.aggregation_agent = AggregationAgent(verbose=False)
                 
         except Exception as e:
-            self.data_label.config(text=f"❌ Error: {str(e)}")
-            self.update_status(f"Error: {str(e)}")
+            self.data_label.config(text=f"⚠️ Standalone mode")
+            self.update_status(f"Standalone mode: {str(e)}")
+            
+            # Initialize agents anyway
+            try:
+                self.insights_agent = InsightsAgent(verbose=False)
+                self.aggregation_agent = AggregationAgent(verbose=False)
+            except:
+                pass
     
     def update_status(self, message):
         """Update status bar"""
@@ -486,45 +731,6 @@ Transcript 3 content here...""")
         if values:
             self.batch_value_var.set(values[0])
     
-    def analyze_single_transcript(self):
-        """Analyze single transcript"""
-        transcript = self.transcript_input.get('1.0', 'end-1c').strip()
-        
-        if not transcript or transcript == 'Paste your transcript here...':
-            messagebox.showwarning("Warning", "Please enter a transcript to analyze")
-            return
-        
-        if self.insights_agent is None:
-            messagebox.showerror("Error", "Agent not initialized. Please wait for data to load.")
-            return
-        
-        self.update_status("Analyzing transcript...")
-        self.single_result_text.delete('1.0', 'end')
-        self.single_result_text.insert('end', "🔄 Analyzing...\n\n")
-        self.root.update_idletasks()
-        
-        # Run in thread
-        def analyze():
-            metadata = {
-                'customer_type': self.cust_type_var.get(),
-                'city': self.city_var.get()
-            }
-            
-            try:
-                result = self.insights_agent.analyze_transcript(transcript, metadata)
-                self.current_result = result
-                self.current_transcript = transcript
-                
-                # Display results
-                self.root.after(0, lambda: self.display_single_result(result))
-                self.root.after(0, lambda: self.update_status("Analysis complete"))
-                
-            except Exception as e:
-                self.root.after(0, lambda: self.single_result_text.insert('end', f"\n❌ Error: {str(e)}"))
-                self.root.after(0, lambda: self.update_status(f"Error: {str(e)}"))
-        
-        threading.Thread(target=analyze, daemon=True).start()
-    
     def display_single_result(self, result):
         """Display single analysis result"""
         self.single_result_text.delete('1.0', 'end')
@@ -536,36 +742,44 @@ Transcript 3 content here...""")
 ╚══════════════════════════════════════════════════════════════════╝
 
 🏷️  PRIMARY CATEGORY: {result.get('primary_category', 'N/A')}
+🎭 SELLER UNDERTONE: {result.get('seller_undertone', 'N/A')}
 
 📝 ISSUE SUMMARY:
    {result.get('issue_summary', 'N/A')}
 
-😊 SENTIMENT: {result.get('sentiment', 'N/A')}
-📈 SENTIMENT SHIFT: {result.get('sentiment_shift', 'N/A')}
-⚠️  CHURN RISK: {result.get('churn_risk', 'N/A')}
-🚨 URGENCY: {result.get('urgency', 'N/A')}
-✅ RESOLUTION: {result.get('resolution_status', 'N/A')}
+⚠️  CHURN RISK: {result.get('churn_risk_assessment', {}).get('risk_level', 'N/A')}
 
-😟 CUSTOMER PAIN POINTS:
 """
-            for pp in result.get('customer_pain_points', []):
-                text += f"   • {pp}\n"
+            # Pain points
+            pain_points = result.get('seller_pain_points', {})
+            if pain_points:
+                text += "😟 SELLER PAIN POINTS:\n"
+                for k, v in pain_points.items():
+                    if v and v != 'N/A' and v != 'None':
+                        text += f"   • {k}: {v}\n"
             
-            exec_perf = result.get('executive_performance', {})
-            text += f"""
-👨‍💼 EXECUTIVE PERFORMANCE:
-   Empathy: {'✅' if exec_perf.get('empathy_shown') else '❌'}
-   Solution Offered: {'✅' if exec_perf.get('solution_offered') else '❌'}
-   Followed Process: {'✅' if exec_perf.get('followed_process') else '❌'}
-   Escalation Needed: {'⚠️' if exec_perf.get('escalation_needed') else '✅ No'}
-
-💡 ACTIONABLE INSIGHT:
-   {result.get('actionable_insight', 'N/A')}
-
-🔄 FOLLOW-UP REQUIRED: {'Yes - ' + result.get('follow_up_reason', '') if result.get('requires_follow_up') else 'No'}
-
-🏷️  KEYWORDS: {', '.join(result.get('keywords', []))}
-"""
+            # Opportunities
+            opps = result.get('opportunities', {})
+            if opps.get('upsell_opportunity'):
+                text += f"\n💰 UPSELL OPPORTUNITY: {opps.get('upsell_type', 'Yes')}\n"
+            
+            # Education needed
+            seller_understanding = result.get('seller_understanding', {})
+            if seller_understanding.get('needs_base_education'):
+                text += f"\n📚 NEEDS EDUCATION: {', '.join(seller_understanding.get('education_topics_needed', []))}\n"
+            
+            # Talking points
+            talking_points = result.get('top_5_talking_points', [])
+            if talking_points:
+                text += "\n💡 TOP TALKING POINTS:\n"
+                for i, point in enumerate(talking_points[:5], 1):
+                    text += f"   {i}. {point}\n"
+            
+            # Recommendation
+            text += f"\n🎯 RECOMMENDATION:\n   {result.get('proactive_recommendation', 'N/A')}\n"
+            
+            # Processing time
+            text += f"\n⏱️ Processing time: {result.get('processing_time', 'N/A')}s"
         else:
             text = f"❌ Analysis failed: {result.get('error', 'Unknown error')}"
         
@@ -578,7 +792,7 @@ Transcript 3 content here...""")
         if not question:
             return
         
-        if not hasattr(self, 'current_transcript'):
+        if not hasattr(self, 'current_transcript') or not self.current_transcript:
             messagebox.showwarning("Warning", "Please analyze a transcript first")
             return
         
@@ -600,11 +814,7 @@ Transcript 3 content here...""")
     
     def run_batch_analysis(self):
         """Run batch analysis from selected source"""
-        if self.aggregation_agent is None:
-            messagebox.showerror("Error", "Agent not initialized")
-            return
-        
-        source = self.input_source_var.get()
+        source = self.batch_source_var.get()
         
         self.batch_result_text.delete('1.0', 'end')
         self.progress_var.set(0)
@@ -615,6 +825,101 @@ Transcript 3 content here...""")
             self.run_paste_analysis()
         elif source == "file":
             self.run_file_analysis()
+        elif source == "audio_folder":
+            self.run_audio_folder_analysis()
+    
+    def run_audio_folder_analysis(self):
+        """Process audio files from folder"""
+        if not hasattr(self, 'selected_audio_folder') or not self.selected_audio_folder:
+            messagebox.showwarning("Warning", "Please select an audio folder first")
+            return
+        
+        folder = self.selected_audio_folder
+        audio_files = [os.path.join(folder, f) for f in os.listdir(folder) 
+                      if f.endswith(('.mp3', '.wav', '.m4a', '.ogg'))]
+        
+        if not audio_files:
+            messagebox.showwarning("Warning", "No audio files found in folder")
+            return
+        
+        self.batch_result_text.insert('end', f"🎤 Processing {len(audio_files)} audio files...\n\n")
+        self.update_status(f"Processing {len(audio_files)} audio files")
+        
+        def run():
+            try:
+                stt = self.get_vosk_stt()
+                if stt is None:
+                    self.root.after(0, lambda: messagebox.showerror("Error", "Failed to load Vosk STT"))
+                    return
+                
+                results = []
+                total = len(audio_files)
+                
+                for i, audio_path in enumerate(audio_files, 1):
+                    filename = os.path.basename(audio_path)
+                    self.root.after(0, lambda i=i, f=filename: self.batch_result_text.insert('end', f"[{i}/{total}] Transcribing: {f}\n"))
+                    self.root.after(0, lambda i=i: self.progress_var.set(i / total * 50))
+                    
+                    # Transcribe
+                    try:
+                        transcript_result = stt.transcribe(audio_path)
+                        transcript = transcript_result.get('transcript', '')
+                        
+                        if transcript:
+                            # Analyze with LLM
+                            self.root.after(0, lambda i=i: self.batch_result_text.insert('end', f"    Analyzing with LLM...\n"))
+                            
+                            insights = self.insights_agent.analyze_transcript(transcript, {'source': filename})
+                            
+                            results.append({
+                                'file': filename,
+                                'transcript': transcript[:500],
+                                'category': insights.get('primary_category', 'N/A'),
+                                'undertone': insights.get('seller_undertone', 'N/A'),
+                                'churn_risk': insights.get('churn_risk_assessment', {}).get('risk_level', 'N/A'),
+                                'summary': insights.get('issue_summary', 'N/A')
+                            })
+                            
+                            self.root.after(0, lambda cat=insights.get('primary_category'): 
+                                self.batch_result_text.insert('end', f"    ✅ Category: {cat}\n\n"))
+                    except Exception as e:
+                        self.root.after(0, lambda f=filename, e=str(e): 
+                            self.batch_result_text.insert('end', f"    ❌ Error: {e}\n\n"))
+                    
+                    self.root.after(0, lambda i=i: self.progress_var.set(50 + i / total * 50))
+                
+                # Display summary
+                def show_summary():
+                    self.batch_result_text.insert('end', "\n" + "="*60 + "\n")
+                    self.batch_result_text.insert('end', "📊 BATCH SUMMARY\n")
+                    self.batch_result_text.insert('end', "="*60 + "\n\n")
+                    
+                    self.batch_result_text.insert('end', f"Total files: {len(audio_files)}\n")
+                    self.batch_result_text.insert('end', f"Processed: {len(results)}\n\n")
+                    
+                    # Category distribution
+                    categories = {}
+                    for r in results:
+                        cat = r.get('category', 'N/A')
+                        categories[cat] = categories.get(cat, 0) + 1
+                    
+                    self.batch_result_text.insert('end', "Category Distribution:\n")
+                    for cat, count in sorted(categories.items(), key=lambda x: -x[1]):
+                        self.batch_result_text.insert('end', f"  • {cat}: {count}\n")
+                    
+                    self.progress_var.set(100)
+                    self.update_status("Audio batch analysis complete")
+                
+                self.root.after(0, show_summary)
+                
+                # Save results
+                self.current_result = {'audio_results': results, 'total': len(audio_files)}
+                self.save_batch_result(self.current_result, "audio_folder", os.path.basename(folder))
+                
+            except Exception as e:
+                self.root.after(0, lambda: self.batch_result_text.insert('end', f"\n❌ Error: {str(e)}"))
+        
+        threading.Thread(target=run, daemon=True).start()
     
     def run_dataset_analysis(self):
         """Run analysis from loaded dataset"""
@@ -668,7 +973,6 @@ Transcript 3 content here...""")
             messagebox.showwarning("Warning", "Please paste transcripts to analyze")
             return
         
-        # Split by separator
         transcripts_text = text.split('---')
         transcripts = []
         
@@ -677,11 +981,7 @@ Transcript 3 content here...""")
             if t:
                 transcripts.append({
                     'transcript': t,
-                    'metadata': {
-                        'customer_type': 'Unknown',
-                        'city': 'Unknown',
-                        'source': f'Pasted transcript {i+1}'
-                    }
+                    'metadata': {'source': f'Pasted transcript {i+1}'}
                 })
         
         if not transcripts:
@@ -696,7 +996,6 @@ Transcript 3 content here...""")
                 self.aggregation_agent.verbose = False
                 result = self.aggregation_agent.analyze_multiple_transcripts(transcripts, show_individual=False)
                 
-                # Generate summary
                 summary = self.aggregation_agent.generate_executive_summary(result)
                 result['executive_summary'] = summary
                 
@@ -708,7 +1007,6 @@ Transcript 3 content here...""")
                 
             except Exception as e:
                 self.root.after(0, lambda: self.batch_result_text.insert('end', f"\n❌ Error: {str(e)}"))
-                self.root.after(0, lambda: self.update_status(f"Error: {str(e)}"))
         
         threading.Thread(target=run, daemon=True).start()
     
@@ -719,17 +1017,14 @@ Transcript 3 content here...""")
             return
         
         try:
-            # Load file
             if self.loaded_file_path.endswith('.csv'):
                 file_df = pd.read_csv(self.loaded_file_path)
             else:
-                # Assume text file with transcripts separated by ---
                 with open(self.loaded_file_path, 'r', encoding='utf-8') as f:
                     text = f.read()
                 transcripts_text = text.split('---')
                 file_df = pd.DataFrame({'transcript': [t.strip() for t in transcripts_text if t.strip()]})
             
-            # Check for transcript column
             transcript_col = None
             for col in file_df.columns:
                 if 'transcript' in col.lower():
@@ -744,24 +1039,18 @@ Transcript 3 content here...""")
             for i, row in file_df.iterrows():
                 transcripts.append({
                     'transcript': row[transcript_col],
-                    'metadata': {
-                        'customer_type': row.get('customer_type', 'Unknown'),
-                        'city': row.get('city_name', row.get('city', 'Unknown')),
-                        'source': f'File row {i+1}'
-                    }
+                    'metadata': {'source': f'File row {i+1}'}
                 })
             
             self.batch_result_text.insert('end', f"🔄 Analyzing {len(transcripts)} transcripts from file...\n\n")
-            self.update_status(f"Analyzing {len(transcripts)} transcripts from file")
             
             def run():
                 try:
                     self.aggregation_agent.verbose = False
                     
-                    # Limit to first 50 for performance
                     if len(transcripts) > 50:
                         self.root.after(0, lambda: self.batch_result_text.insert('end', 
-                            f"⚠️ Limiting to first 50 transcripts for performance\n\n"))
+                            f"⚠️ Limiting to first 50 transcripts\n\n"))
                         analyze_transcripts = transcripts[:50]
                     else:
                         analyze_transcripts = transcripts
@@ -779,7 +1068,6 @@ Transcript 3 content here...""")
                     
                 except Exception as e:
                     self.root.after(0, lambda: self.batch_result_text.insert('end', f"\n❌ Error: {str(e)}"))
-                    self.root.after(0, lambda: self.update_status(f"Error: {str(e)}"))
             
             threading.Thread(target=run, daemon=True).start()
             
@@ -824,22 +1112,6 @@ Transcript 3 content here...""")
         for pp, count in list(agg.get('top_pain_points', {}).items())[:5]:
             text += f"   • {pp}: {count}\n"
         
-        exec_perf = agg.get('executive_performance', {})
-        text += f"""
-👨‍💼 EXECUTIVE PERFORMANCE
-   Empathy Rate: {exec_perf.get('empathy_rate', 0)}%
-   Solution Rate: {exec_perf.get('solution_rate', 0)}%
-   Process Compliance: {exec_perf.get('process_compliance', 0)}%
-   Escalation Rate: {exec_perf.get('escalation_rate', 0)}%
-"""
-        
-        # Add recommendations if available
-        for key in ['customer_recommendations', 'location_insights', 'segment_recommendations']:
-            if key in result:
-                text += f"\n{'=' * 60}\n💡 RECOMMENDATIONS\n{'=' * 60}\n\n"
-                text += result[key]
-        
-        # Add executive summary if available
         if 'executive_summary' in result:
             text += f"\n{'=' * 60}\n📋 EXECUTIVE SUMMARY\n{'=' * 60}\n\n"
             text += result['executive_summary']
@@ -850,7 +1122,6 @@ Transcript 3 content here...""")
         """Save batch result to file"""
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         
-        # Remove non-serializable data
         save_result = {k: v for k, v in result.items() if k != 'individual_results'}
         
         filename = f"{OUTPUT_DIR}/gui_analysis_{analysis_type}_{value}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -866,7 +1137,7 @@ Transcript 3 content here...""")
         
         if os.path.exists(OUTPUT_DIR):
             files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.endswith('.json')], reverse=True)
-            for f in files[:50]:  # Show last 50
+            for f in files[:50]:
                 self.results_listbox.insert('end', f)
     
     def load_saved_result(self, event):
@@ -884,7 +1155,6 @@ Transcript 3 content here...""")
             
             self.result_viewer.delete('1.0', 'end')
             
-            # Pretty print JSON
             data = json.loads(content)
             pretty = json.dumps(data, indent=2, ensure_ascii=False)
             self.result_viewer.insert('end', pretty)
@@ -931,4 +1201,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
