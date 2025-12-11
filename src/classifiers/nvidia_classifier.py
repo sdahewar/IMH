@@ -32,6 +32,12 @@ from src.config import (
 CLASSIFICATION_PROMPT = """You are an expert customer service analyst for IndiaMART, India's largest B2B marketplace. 
 Analyze the following call transcript (in Hinglish - Hindi-English mix) and extract structured insights.
 
+CRITICAL RULES:
+1. ONLY analyze content that is ACTUALLY PRESENT in the transcript below
+2. DO NOT make up, imagine, or hallucinate any conversation content
+3. If transcript is too short or unclear, use "INSUFFICIENT_DATA" for unknown fields
+4. Be factual - only report what you can see in the transcript
+
 TRANSCRIPT:
 {transcript}
 

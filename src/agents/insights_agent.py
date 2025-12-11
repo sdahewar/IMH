@@ -28,6 +28,12 @@ from src.config import (
 INSIGHTS_PROMPT = """You are an expert analyst for IndiaMART's customer service team.
 Your role is to ASSIST sales and servicing teams (NOT replace them) by extracting actionable insights.
 
+CRITICAL RULES:
+1. ONLY analyze content that is ACTUALLY PRESENT in the transcript
+2. DO NOT make up, imagine, or hallucinate any conversation content
+3. If the transcript is too short or unclear, say "INSUFFICIENT_DATA" for fields you cannot determine
+4. Be honest - if you cannot extract information, say so
+
 TRANSCRIPT:
 {transcript}
 
@@ -203,6 +209,18 @@ class InsightsAgent:
         self._log(f"\n🔍 Analyzing transcript for IndiaMART insights...")
         self._log(f"   Length: {len(transcript)} characters")
         
+        # Check for minimum transcript length
+        if len(transcript.strip()) < 50:
+            self._log(f"   ⚠️ Transcript too short for meaningful analysis")
+            return {
+                'analysis_success': False,
+                'error': 'Transcript too short (minimum 50 characters required)',
+                'primary_category': 'INSUFFICIENT_DATA',
+                'seller_undertone': 'UNKNOWN',
+                'issue_summary': 'Transcript is too short to provide meaningful analysis',
+                'transcript_preview': transcript[:100]
+            }
+        
         # Limit transcript to ~1500 chars to stay within 4096 token limit
         prompt = INSIGHTS_PROMPT.format(
             transcript=transcript[:1500],
@@ -313,12 +331,16 @@ Provide a JSON response:
         """Ask a specific question about the transcript"""
         prompt = f"""Based on this IndiaMART call transcript, answer the question.
 
+CRITICAL: ONLY use information that is ACTUALLY PRESENT in the transcript below.
+DO NOT make up, imagine, or invent any content that is not in the transcript.
+If the transcript doesn't contain enough information to answer, say "The transcript does not contain this information."
+
 TRANSCRIPT:
 {transcript[:1500]}
 
 QUESTION: {question}
 
-Provide a clear, actionable answer."""
+Provide a clear, factual answer based ONLY on the transcript content."""
 
         try:
             return self._call_llm(prompt)
