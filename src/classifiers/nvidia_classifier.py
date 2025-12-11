@@ -115,7 +115,7 @@ class NvidiaClassifier:
             Dictionary with classification results
         """
         prompt = CLASSIFICATION_PROMPT.format(
-            transcript=transcript[:6000],  # Limit transcript length for model context
+            transcript=transcript[:1500],  # Limit to ~1500 chars for 4096 token context limit
             customer_type=metadata.get('customer_type', 'Unknown'),
             city=metadata.get('city', 'Unknown'),
             call_direction=metadata.get('call_direction', 'Unknown'),
@@ -187,7 +187,7 @@ class NvidiaClassifier:
             Dictionary with classification results
         """
         prompt = CLASSIFICATION_PROMPT.format(
-            transcript=transcript[:6000],
+            transcript=transcript[:1500],
             customer_type=metadata.get('customer_type', 'Unknown'),
             city=metadata.get('city', 'Unknown'),
             call_direction=metadata.get('call_direction', 'Unknown'),

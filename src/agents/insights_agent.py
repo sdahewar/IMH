@@ -203,8 +203,9 @@ class InsightsAgent:
         self._log(f"\n🔍 Analyzing transcript for IndiaMART insights...")
         self._log(f"   Length: {len(transcript)} characters")
         
+        # Limit transcript to ~1500 chars to stay within 4096 token limit
         prompt = INSIGHTS_PROMPT.format(
-            transcript=transcript[:8000],
+            transcript=transcript[:1500],
             customer_type=metadata.get('customer_type', 'Unknown'),
             city=metadata.get('city', 'Unknown'),
             call_direction=metadata.get('call_direction', 'Unknown'),
@@ -251,7 +252,7 @@ class InsightsAgent:
         prompt = f"""Analyze this ongoing IndiaMART call and provide REAL-TIME guidance for the executive.
 
 TRANSCRIPT SO FAR:
-{transcript[:5000]}
+{transcript[:1500]}
 
 Provide a JSON response for the executive popup:
 {{
@@ -313,7 +314,7 @@ Provide a JSON response:
         prompt = f"""Based on this IndiaMART call transcript, answer the question.
 
 TRANSCRIPT:
-{transcript[:6000]}
+{transcript[:1500]}
 
 QUESTION: {question}
 

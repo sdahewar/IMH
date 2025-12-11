@@ -13,7 +13,7 @@ NVIDIA_API_KEY = "nvapi-BOXcH07pkm2tDYUVqaH5yw4SNNBE9ewYZT0V1GUviOwnn6KnRGBsma7E
 # Model parameters
 MODEL_TEMPERATURE = 0.3
 MODEL_TOP_P = 0.9
-MODEL_MAX_TOKENS = 4096
+MODEL_MAX_TOKENS = 2048  # Reduced to fit within 4096 context limit
 
 # Batch processing
 BATCH_SIZE = 10
