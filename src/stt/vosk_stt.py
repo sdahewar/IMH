@@ -25,12 +25,12 @@ class VoskSTT:
     """
     Vosk-based Speech-to-Text for Hindi
     
-    Model: vosk-model-small-hi-0.22
+    Model: vosk-model-hi-0.22 (larger, more accurate)
     """
     
     def __init__(
         self,
-        model_path: str = "vosk-model-small-hi-0.22",
+        model_path: str = "vosk-model-hi-0.22",
         verbose: bool = True
     ):
         self.model_path = model_path
@@ -210,7 +210,7 @@ class STTManager:
     
     def __init__(
         self,
-        model_path: str = "vosk-model-small-hi-0.22",
+        model_path: str = "vosk-model-hi-0.22",
         verbose: bool = True
     ):
         self.verbose = verbose

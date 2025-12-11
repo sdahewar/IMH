@@ -57,3 +57,11 @@ Thumbs.db
 # Logs
 *.log
 
+# Vosk models (too large for git)
+vosk-model-hi-0.22/
+*.zip
+
+# Audio files
+audio/*.wav
+audio/*.mp3
+

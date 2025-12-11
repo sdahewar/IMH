@@ -155,8 +155,8 @@ def main():
     parser.add_argument(
         '--model-path',
         type=str,
-        default='vosk-model-small-hi-0.22',
-        help='Path to Vosk model'
+        default='vosk-model-hi-0.22',
+        help='Path to Vosk model (use vosk-model-hi-0.22 for better accuracy)'
     )
     
     args = parser.parse_args()
