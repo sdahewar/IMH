@@ -8,6 +8,13 @@ numpy>=1.24.0
 # NVIDIA NIM API (OpenAI-compatible)
 openai>=1.0.0
 
+# Speech-to-Text (Vosk - Offline, Free)
+vosk>=0.3.45
+imageio-ffmpeg>=0.4.0
+
+# For Python 3.13+ compatibility
+audioop-lts>=0.2.0
+
 # Environment & utilities
 python-dotenv>=1.0.0
 tqdm>=4.66.0
