@@ -2,7 +2,7 @@
 InsightsAgent - IndiaMART Customer Service Insights Extraction
 AI-Assisted Sales & Servicing Enhancement (NOT replacement)
 
-Key Principle: AI suggests insights, Sales/Servicing teams act on them
+Uses NVIDIA NIM Nemotron-4-Mini-Hindi for Hinglish text analysis
 """
 
 import json
@@ -18,8 +18,7 @@ from src.config import (
     MODEL_TOP_P,
     MODEL_MAX_TOKENS,
     ISSUE_CATEGORIES,
-    SELLER_UNDERTONES,
-    REACH_OUT_METHODS
+    SELLER_UNDERTONES
 )
 
 # =============================================================================
@@ -137,23 +136,13 @@ Analyze this call and provide comprehensive insights in JSON format:
     "proactive_recommendation": "<specific actionable recommendation for the team>"
 }}
 
-IMPORTANT GUIDELINES:
-1. Focus on ACTIONABLE insights that help sales/servicing teams
-2. Identify if seller needs BASE EDUCATION on IndiaMART platform
-3. Detect CHURN RISK signals and WINBACK opportunities
-4. Note any UPSELL or RENEWAL opportunities
-5. Check if executive asked about APP SHARING COMPLIANCE
-6. Identify if PRODUCTION TEAM support is needed
-7. Extract TALKING POINTS for future calls
-8. Determine BEST METHOD to reach this seller
-9. Be specific with pain points and recommendations
-
 Respond ONLY with valid JSON."""
 
 
 class InsightsAgent:
     """
     IndiaMART Insights Agent - Assists sales/servicing teams with AI-powered insights
+    Uses NVIDIA NIM for analysis
     """
     
     def __init__(self, api_key: str = None, verbose: bool = True):
@@ -165,37 +154,32 @@ class InsightsAgent:
         self.model = NVIDIA_MODEL
         self.verbose = verbose
         
+        self._log(f"✅ InsightsAgent initialized (NVIDIA NIM)")
+        
     def _log(self, message: str):
         if self.verbose:
             print(message)
     
-    def _call_llm(self, prompt: str, system_prompt: str = None) -> str:
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
+    def _call_llm(self, prompt: str) -> str:
+        """Call NVIDIA NIM API"""
+        response_text = ""
+        completion = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=MODEL_TEMPERATURE,
+            top_p=MODEL_TOP_P,
+            max_tokens=MODEL_MAX_TOKENS,
+            stream=True
+        )
         
-        try:
-            response_text = ""
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=MODEL_TEMPERATURE,
-                top_p=MODEL_TOP_P,
-                max_tokens=MODEL_MAX_TOKENS,
-                stream=True
-            )
-            
-            for chunk in completion:
-                if chunk.choices[0].delta.content is not None:
-                    response_text += chunk.choices[0].delta.content
-            
-            return response_text.strip()
-        except Exception as e:
-            self._log(f"❌ LLM Error: {str(e)}")
-            raise
+        for chunk in completion:
+            if chunk.choices[0].delta.content is not None:
+                response_text += chunk.choices[0].delta.content
+        
+        return response_text.strip()
     
     def _parse_json_response(self, response: str) -> Dict:
+        """Parse JSON from response"""
         response = response.strip()
         if response.startswith("```"):
             lines = response.split("\n")
@@ -229,14 +213,19 @@ class InsightsAgent:
         )
         
         try:
+            start_time = time.time()
             response = self._call_llm(prompt)
+            elapsed = time.time() - start_time
+            
             result = self._parse_json_response(response)
             result['analysis_success'] = True
+            result['processing_time'] = round(elapsed, 2)
             
             # Log key findings
             self._log(f"   ✅ Category: {result.get('primary_category', 'N/A')}")
             self._log(f"   🎭 Undertone: {result.get('seller_undertone', 'N/A')}")
             self._log(f"   ⚠️  Churn Risk: {result.get('churn_risk_assessment', {}).get('risk_level', 'N/A')}")
+            self._log(f"   ⏱️  Time: {elapsed:.2f}s")
             
             if result.get('opportunities', {}).get('upsell_opportunity'):
                 self._log(f"   💰 UPSELL OPPORTUNITY DETECTED!")
@@ -256,7 +245,6 @@ class InsightsAgent:
     def get_executive_popup(self, transcript: str) -> Dict[str, Any]:
         """
         Generate real-time popup insights for executives during calls
-        Top 5 talking points + key alerts
         """
         self._log("\n📌 Generating executive popup...")
         
@@ -293,7 +281,6 @@ Provide a JSON response for the executive popup:
         """
         self._log("\n📚 Generating daily learnings...")
         
-        # Combine transcripts (sample if too many)
         combined = "\n---\n".join(transcripts[:10])
         
         prompt = f"""Analyze these IndiaMART customer service calls from today and provide learnings for executives.
@@ -331,26 +318,6 @@ TRANSCRIPT:
 QUESTION: {question}
 
 Provide a clear, actionable answer."""
-
-        try:
-            return self._call_llm(prompt)
-        except Exception as e:
-            return f"Error: {str(e)}"
-    
-    def compare_with_benchmark(self, transcript: str, seller_segment: str) -> str:
-        """
-        Compare this call with benchmarks for the seller segment
-        """
-        prompt = f"""Compare this IndiaMART call against typical calls for {seller_segment} sellers.
-
-TRANSCRIPT:
-{transcript[:5000]}
-
-Provide analysis:
-1. How does this seller compare to typical {seller_segment} sellers?
-2. Is this call better or worse than average?
-3. What strategies from successful calls could help here?
-4. Subscription feedback comparison"""
 
         try:
             return self._call_llm(prompt)
