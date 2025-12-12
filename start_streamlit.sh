@@ -4,7 +4,7 @@
 # This script installs Streamlit if needed and launches the unified dashboard
 
 echo "=============================================="
-echo "  IndiaMART Insights Engine - Streamlit"
+echo "      IndiaMART Echo - Call Translation"
 echo "=============================================="
 echo ""
 
@@ -34,11 +34,11 @@ fi
 
 echo ""
 echo "=============================================="
-echo "  Starting Streamlit Dashboard"
+echo "  Starting Call Translation Interface"
 echo "=============================================="
 echo ""
 echo "📊 Dashboard will be available at: http://localhost:8501"
-echo "🔊 Transcription tab includes Sarvam AI integration"
+echo "🎙️ Powered by Sarvam AI Translation API"
 echo ""
 
 # Start Streamlit

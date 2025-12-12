@@ -286,7 +286,8 @@ st.markdown("""
 @st.cache_data
 def load_raw_data():
     """Load the raw Excel data"""
-    paths = ["Data Voice Hackathon_Master-1.xlsx", "data/Data Voice Hackathon_Master-1.xlsx"]
+    # Try multiple possible locations
+    paths = ["datasets/Data Voice Hackathon_Master-1.xlsx", "Data Voice Hackathon_Master-1.xlsx", "data/Data Voice Hackathon_Master-1.xlsx"]
     for path in paths:
         if os.path.exists(path):
             try:
@@ -356,7 +357,7 @@ def main():
     # Footer Section
     st.markdown("""
         <div class="echo-footer">
-            IndiaMART Voice AI Hackathon 2024<br>
+            IndiaMART Voice AI Hackathon 2025<br>
             Powered by Sarvam AI Translation API
         </div>
     """, unsafe_allow_html=True)

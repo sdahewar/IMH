@@ -121,7 +121,7 @@ def run_demo():
     
     # Load data
     print("\n📂 Loading dataset...")
-    df = pd.read_excel("Data Voice Hackathon_Master-1.xlsx")
+    df = pd.read_excel("datasets/Data Voice Hackathon_Master-1.xlsx")
     print(f"   Loaded {len(df):,} call records")
     
     # Select 5 diverse use cases

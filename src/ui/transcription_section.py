@@ -15,6 +15,40 @@ from typing import Dict, List, Any, Optional
 SARVAM_API_URL = "http://localhost:8888/translate"
 TRANSCRIPTS_DIR = "output/transcripts"
 
+# Load enhanced segments dataset for BusinessSegment lookup
+@st.cache_data
+def load_enhanced_segments():
+    """Load enhanced segments dataset"""
+    try:
+        return pd.read_excel("datasets/enhanced_segments.xlsx")
+    except Exception as e:
+        st.warning(f"Could not load enhanced_segments.xlsx: {e}")
+        return None
+
+def get_business_segment(glid: int) -> str:
+    """
+    Get BusinessSegment for a given GLID from enhanced_segments.xlsx
+    
+    Args:
+        glid: Global ID to lookup
+        
+    Returns:
+        BusinessSegment string or 'N/A' if not found
+    """
+    segments_df = load_enhanced_segments()
+    if segments_df is None:
+        return 'N/A'
+    
+    try:
+        # Find the row with matching GLID
+        segment_row = segments_df[segments_df['GLID'] == glid]
+        if not segment_row.empty:
+            return str(segment_row.iloc[0].get('BusinessSegment', 'N/A'))
+        return 'N/A'
+    except Exception as e:
+        return 'N/A'
+
+
 def fetch_calls_for_glid(df: pd.DataFrame, glid: str) -> pd.DataFrame:
     """
     Fetch all calls for a specific GLID, sorted by call_entered_on
@@ -192,7 +226,18 @@ def render_call_result(call_idx: int, call_row: pd.Series, transcript_data: Dict
         with col3:
             st.metric("Direction", call_row.get('FLAG_IN_OUT', 'N/A'))
         with col4:
-            st.metric("City", call_row.get('city_name', 'N/A'))
+            # Get BusinessSegment from enhanced_segments.xlsx based on GLID
+            glid = call_row.get('glid', None)
+            business_segment = get_business_segment(glid) if glid else 'N/A'
+            # Custom CSS to reduce font size for longer text
+            st.markdown("""
+                <style>
+                [data-testid="stMetricValue"] {
+                    font-size: 18px !important;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+            st.metric("Business Segment", business_segment)
         
         # Audio player
         audio_url = call_row.get('call_recording_url', '')
@@ -240,6 +285,114 @@ def render_call_result(call_idx: int, call_row: pd.Series, transcript_data: Dict
             if transcript_data.get('error_details'):
                 with st.expander("Error Details"):
                     st.code(transcript_data['error_details'])
+        
+        # Insights Generation Section
+        if transcript_data.get('status') == 'success':
+            st.markdown("---")
+            st.markdown("### 🧠 AI-Powered Insights")
+            
+            # Get Insights button
+            if st.button("🔍 Generate Insights", type="primary", use_container_width=True):
+                with st.spinner("Analyzing call with AI... This may take a few seconds"):
+                    try:
+                        from src.insights_engine import generate_insights
+                        
+                        # Prepare segment info
+                        segment_info = {
+                            'glid': call_row.get('glid', 'N/A'),
+                            'segment': call_row.get('customer_type', 'N/A'),
+                            'business_segment': get_business_segment(call_row.get('glid', None)) if call_row.get('glid') else 'N/A'
+                        }
+                        
+                        # Generate insights
+                        insights_result = generate_insights(transcript_data, segment_info)
+                        
+                        if insights_result.get('status') == 'success':
+                            insights = insights_result.get('insights', {})
+                            
+                            # Display insights in organized sections
+                            st.success("✅ Insights generated successfully!")
+                            
+                            # Problems Identified
+                            with st.expander("📋 **Identified Problems & Actionables**", expanded=True):
+                                problems = insights.get('problems_identified', [])
+                                if problems:
+                                    for i, problem in enumerate(problems, 1):
+                                        st.markdown(f"**{i}. {problem.get('problem_name', 'Unknown')}**")
+                                        st.markdown(f"*Evidence:* {problem.get('evidence_from_transcript', 'N/A')}")
+                                        st.markdown("**Actionables:**")
+                                        for action in problem.get('actionables', []):
+                                            st.markdown(f"• {action}")
+                                        if problem.get('action_for_indiamart'):
+                                            st.markdown(f"**Action for IndiaMART:** {problem.get('action_for_indiamart')}")
+                                        if i < len(problems):
+                                            st.markdown("---")
+                                else:
+                                    st.info("No mapped problems found in this call.")
+                            
+                            # Seller Tone Analysis
+                            with st.expander("😊 **Seller Tone Analysis**"):
+                                seller_tone = insights.get('seller_tone', {})
+                                
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("Sentiment", seller_tone.get('sentiment', 'N/A'))
+                                    st.metric("Churn Risk", seller_tone.get('churn_risk', 'N/A'))
+                                    st.metric("Issue Severity", seller_tone.get('issue_severity', 'N/A'))
+                                
+                                with col2:
+                                    st.metric("Upsell Readiness", seller_tone.get('upsell_readiness', 'N/A'))
+                                    st.metric("Engagement Level", seller_tone.get('engagement_level', 'N/A'))
+                                    st.metric("Trust & Rapport", seller_tone.get('trust_and_rapport', 'N/A'))
+                                
+                                with col3:
+                                    st.metric("Outcome Prediction", seller_tone.get('outcome_prediction', 'N/A'))
+                                    st.metric("Follow-up Willingness", seller_tone.get('follow_up_willingness', 'N/A'))
+                                
+                                if seller_tone.get('emotional_trigger_points'):
+                                    st.markdown(f"**Emotional Triggers:** {seller_tone.get('emotional_trigger_points')}")
+                                
+                                if seller_tone.get('actionables_if_any'):
+                                    st.markdown("**Recommended Actions:**")
+                                    for action in seller_tone.get('actionables_if_any', []):
+                                        st.markdown(f"• {action}")
+                            
+                            # Executive Tone Analysis
+                            with st.expander("👨‍💼 **Executive Performance Analysis**"):
+                                exec_tone = insights.get('executive_tone', {})
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.markdown(f"**Empathy & Professionalism:** {exec_tone.get('empathy_and_professionalism', 'N/A')}")
+                                    st.markdown(f"**Clarity & Confidence:** {exec_tone.get('clarity_and_confidence', 'N/A')}")
+                                    st.markdown(f"**Persuasion Effectiveness:** {exec_tone.get('persuasion_effectiveness', 'N/A')}")
+                                
+                                with col2:
+                                    st.markdown(f"**Problem-Solving:** {exec_tone.get('problem_solving_orientation', 'N/A')}")
+                                    st.markdown(f"**Rapport-Building:** {exec_tone.get('rapport_building_strength', 'N/A')}")
+                                
+                                if exec_tone.get('actionables_if_any'):
+                                    st.markdown("**Improvement Suggestions:**")
+                                    for action in exec_tone.get('actionables_if_any', []):
+                                        st.markdown(f"• {action}")
+                            
+                            # Segment-Specific Insights
+                            with st.expander("📊 **Segment-Specific Insights**"):
+                                segment_notes = insights.get('segment_notes', {})
+                                st.markdown(f"**Segment:** {segment_notes.get('segment', 'N/A')}")
+                                st.markdown(f"**Business Segment:** {segment_notes.get('business_segment', 'N/A')}")
+                                st.markdown(f"**Relevance:** {segment_notes.get('relevance_to_segment', 'N/A')}")
+                        
+                        else:
+                            st.error(f"❌ Insights generation failed: {insights_result.get('message', 'Unknown error')}")
+                            if insights_result.get('raw_response'):
+                                with st.expander("Raw LLM Response"):
+                                    st.code(insights_result['raw_response'])
+                    
+                    except ImportError:
+                        st.error("❌ Insights engine not available. Please install required dependencies: `pip install google-generativeai python-dotenv`")
+                    except Exception as e:
+                        st.error(f"❌ Error generating insights: {str(e)}")
 
 
 def render_transcription_ui(df: pd.DataFrame):
@@ -429,52 +582,72 @@ def render_call_translation_ui(df: pd.DataFrame):
             key="translate_btn"
         )
     
+    # Initialize session state for translation
+    if 'current_call_id' not in st.session_state:
+        st.session_state.current_call_id = None
+    if 'current_call_row' not in st.session_state:
+        st.session_state.current_call_row = None
+    if 'current_transcript' not in st.session_state:
+        st.session_state.current_transcript = None
+    if 'current_audio_url' not in st.session_state:
+        st.session_state.current_audio_url = None
+    
     # Process translation
     if translate_button:
         if not call_id_input or not call_id_input.strip():
             st.error("Please enter a Call ID")
-            return
-        
-        call_id = call_id_input.strip()
-        
-        # Fetch call from dataset
-        with st.spinner(f"Fetching call {call_id}..."):
-            call_row = fetch_call_by_id(df, call_id)
-        
-        if call_row is None:
-            st.error(f"No call found with ID: {call_id}")
-            st.info("Tip: Make sure you're entering a valid click_to_call_id from the dataset")
-            return
-        
-        # Get audio URL
-        audio_url = str(call_row.get('call_recording_url', ''))
-        
-        if not audio_url or audio_url == 'nan':
-            st.error("No audio recording URL found for this call")
-            return
-        
-        # Check cache first
-        cached_transcript = load_cached_transcript(
-            str(call_row.get('glid', '')), 
-            call_id
-        )
-        
-        if cached_transcript:
-            st.success("Using cached translation")
-            transcript_data = cached_transcript
         else:
-            # Call Sarvam API
-            with st.spinner("Translating audio... This may take up to few seconds"):
-                transcript_data = transcribe_call(audio_url)
+            call_id = call_id_input.strip()
             
-            # Save to cache if successful
-            if transcript_data.get('status') == 'success':
-                save_transcript_locally(
-                    str(call_row.get('glid', '')),
-                    str(call_row.get('call_entered_on', '')),
-                    call_id,
-                    transcript_data
-                )
+            # Fetch call from dataset
+            with st.spinner(f"Fetching call {call_id}..."):
+                call_row = fetch_call_by_id(df, call_id)
+            
+            if call_row is None:
+                st.error(f"No call found with ID: {call_id}")
+                st.info("Tip: Make sure you're entering a valid click_to_call_id from the dataset")
+            else:
+                # Get audio URL
+                audio_url = str(call_row.get('call_recording_url', ''))
+                
+                if not audio_url or audio_url == 'nan':
+                    st.error("No audio recording URL found for this call")
+                else:
+                    # Check cache first
+                    cached_transcript = load_cached_transcript(
+                        str(call_row.get('glid', '')), 
+                        call_id
+                    )
+                    
+                    if cached_transcript:
+                        st.success("Using cached translation")
+                        transcript_data = cached_transcript
+                    else:
+                        # Call Sarvam API
+                        with st.spinner("Translating audio... This may take up to few seconds"):
+                            transcript_data = transcribe_call(audio_url)
+                        
+                        # Save to cache if successful
+                        if transcript_data.get('status') == 'success':
+                            save_transcript_locally(
+                                str(call_row.get('glid', '')),
+                                str(call_row.get('call_entered_on', '')),
+                                call_id,
+                                transcript_data
+                            )
+                    
+                    # Store in session state
+                    st.session_state.current_call_id = call_id
+                    st.session_state.current_call_row = call_row
+                    st.session_state.current_transcript = transcript_data
+                    st.session_state.current_audio_url = audio_url
+    
+    # Display translation results if available in session state
+    if st.session_state.current_transcript is not None:
+        call_id = st.session_state.current_call_id
+        call_row = st.session_state.current_call_row
+        transcript_data = st.session_state.current_transcript
+        audio_url = st.session_state.current_audio_url
         
         # Display results in an expander (popup-like)
         st.markdown("---")
@@ -487,13 +660,24 @@ def render_call_translation_ui(df: pd.DataFrame):
             st.markdown("### Call Details")
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Call ID", call_id)
+                st.metric("Call ID", call_row.get('click_to_call_id', 'N/A'))
             with col2:
                 st.metric("Duration", f"{call_row.get('call_duration', 0)}s")
             with col3:
                 st.metric("Direction", call_row.get('FLAG_IN_OUT', 'N/A'))
             with col4:
-                st.metric("City", call_row.get('city_name', 'N/A'))
+                # Get BusinessSegment from enhanced_segments.xlsx based on GLID
+                glid = call_row.get('glid', None)
+                business_segment = get_business_segment(glid) if glid else 'N/A'
+                # Custom CSS to reduce font size for longer text
+                st.markdown("""
+                    <style>
+                    [data-testid="stMetricValue"] {
+                        font-size: 18px !important;
+                    }
+                    </style>
+                """, unsafe_allow_html=True)
+                st.metric("Business Segment", business_segment)
             
             # Audio player
             st.markdown("### Audio Recording")
@@ -549,6 +733,129 @@ def render_call_translation_ui(df: pd.DataFrame):
             # Raw JSON expander
             with st.expander("View Raw JSON Response"):
                 st.json(transcript_data)
+            
+            # Insights Generation Section
+            st.markdown("---")
+            st.markdown("### 🧠 AI-Powered Insights")
+            
+            # Initialize session state for insights
+            if 'insights_data' not in st.session_state:
+                st.session_state.insights_data = None
+            if 'insights_call_id' not in st.session_state:
+                st.session_state.insights_call_id = None
+            
+            # Get Insights button
+            if st.button("🔍 Generate Insights", type="primary", use_container_width=True, key="insights_btn_main"):
+                with st.spinner("Analyzing call with AI... This may take a few seconds"):
+                    try:
+                        from src.insights_engine import generate_insights
+                        
+                        # Prepare segment info
+                        segment_info = {
+                            'glid': call_row.get('glid', 'N/A'),
+                            'segment': call_row.get('customer_type', 'N/A'),
+                            'business_segment': get_business_segment(call_row.get('glid', None)) if call_row.get('glid') else 'N/A'
+                        }
+                        
+                        # Generate insights
+                        insights_result = generate_insights(transcript_data, segment_info)
+                        
+                        # Store in session state
+                        st.session_state.insights_data = insights_result
+                        st.session_state.insights_call_id = call_id
+                        
+                        if insights_result.get('status') != 'success':
+                            st.error(f"❌ Insights generation failed: {insights_result.get('message', 'Unknown error')}")
+                    
+                    except ImportError:
+                        st.error("❌ Insights engine not available. Please install required dependencies: `pip install google-generativeai python-dotenv`")
+                    except Exception as e:
+                        st.error(f"❌ Error generating insights: {str(e)}")
+            
+            # Display insights if available in session state (outside button handler)
+            if st.session_state.insights_data is not None and st.session_state.insights_call_id == call_id:
+                insights_result = st.session_state.insights_data
+                
+                if insights_result.get('status') == 'success':
+                    insights = insights_result.get('insights', {})
+                    
+                    # Display insights in organized sections
+                    st.success("✅ Insights generated successfully!")
+                    
+                    # Problems Identified
+                    with st.expander("📋 **Identified Problems & Actionables**", expanded=True):
+                        problems = insights.get('problems_identified', [])
+                        if problems:
+                            for i, problem in enumerate(problems, 1):
+                                st.markdown(f"**{i}. {problem.get('problem_name', 'Unknown')}**")
+                                st.markdown(f"*Evidence:* {problem.get('evidence_from_transcript', 'N/A')}")
+                                st.markdown("**Actionables:**")
+                                for action in problem.get('actionables', []):
+                                    st.markdown(f"• {action}")
+                                if problem.get('action_for_indiamart'):
+                                    st.markdown(f"**Action for IndiaMART:** {problem.get('action_for_indiamart')}")
+                                if i < len(problems):
+                                    st.markdown("---")
+                        else:
+                            st.info("No mapped problems found in this call.")
+                    
+                    # Seller Tone Analysis
+                    with st.expander("😊 **Seller Tone Analysis**"):
+                        seller_tone = insights.get('seller_tone', {})
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Sentiment", seller_tone.get('sentiment', 'N/A'))
+                            st.metric("Churn Risk", seller_tone.get('churn_risk', 'N/A'))
+                            st.metric("Issue Severity", seller_tone.get('issue_severity', 'N/A'))
+                        
+                        with col2:
+                            st.metric("Upsell Readiness", seller_tone.get('upsell_readiness', 'N/A'))
+                            st.metric("Engagement Level", seller_tone.get('engagement_level', 'N/A'))
+                            st.metric("Trust & Rapport", seller_tone.get('trust_and_rapport', 'N/A'))
+                        
+                        with col3:
+                            st.metric("Outcome Prediction", seller_tone.get('outcome_prediction', 'N/A'))
+                            st.metric("Follow-up Willingness", seller_tone.get('follow_up_willingness', 'N/A'))
+                        
+                        if seller_tone.get('emotional_trigger_points'):
+                            st.markdown(f"**Emotional Triggers:** {seller_tone.get('emotional_trigger_points')}")
+                        
+                        if seller_tone.get('actionables_if_any'):
+                            st.markdown("**Recommended Actions:**")
+                            for action in seller_tone.get('actionables_if_any', []):
+                                st.markdown(f"• {action}")
+                    
+                    # Executive Tone Analysis
+                    with st.expander("👨‍💼 **Executive Performance Analysis**"):
+                        exec_tone = insights.get('executive_tone', {})
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**Empathy & Professionalism:** {exec_tone.get('empathy_and_professionalism', 'N/A')}")
+                            st.markdown(f"**Clarity & Confidence:** {exec_tone.get('clarity_and_confidence', 'N/A')}")
+                            st.markdown(f"**Persuasion Effectiveness:** {exec_tone.get('persuasion_effectiveness', 'N/A')}")
+                        
+                        with col2:
+                            st.markdown(f"**Problem-Solving:** {exec_tone.get('problem_solving_orientation', 'N/A')}")
+                            st.markdown(f"**Rapport-Building:** {exec_tone.get('rapport_building_strength', 'N/A')}")
+                        
+                        if exec_tone.get('actionables_if_any'):
+                            st.markdown("**Improvement Suggestions:**")
+                            for action in exec_tone.get('actionables_if_any', []):
+                                st.markdown(f"• {action}")
+                    
+                    # Segment-Specific Insights
+                    with st.expander("📊 **Segment-Specific Insights**"):
+                        segment_notes = insights.get('segment_notes', {})
+                        st.markdown(f"**Segment:** {segment_notes.get('segment', 'N/A')}")
+                        st.markdown(f"**Business Segment:** {segment_notes.get('business_segment', 'N/A')}")
+                        st.markdown(f"**Relevance:** {segment_notes.get('relevance_to_segment', 'N/A')}")
+                
+                else:
+                    if insights_result.get('raw_response'):
+                        with st.expander("Raw LLM Response"):
+                            st.code(insights_result['raw_response'])
         else:
             # Error case
             error_msg = transcript_data.get('message', 'Unknown error')

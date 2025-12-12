@@ -1,260 +1,199 @@
-# 📞 IndiaMART Insights Engine
+# IndiaMART Echo - Call Translation & Insights
 
-> Voice Call Analysis Pipeline | Data Voice Hackathon 2024
+AI-powered call translation and insights engine for IndiaMART's Voice Call Hackathon.
 
-Transform 5,600+ customer service call transcripts into actionable business insights using **NVIDIA NIM Nemotron-4-Mini-Hindi** - an AI model specifically optimized for Hindi and Hinglish text.
+## Features
 
----
+- **Call Translation**: Translate call recordings using Sarvam AI
+- **Business Segment Detection**: Automatically fetch business segments
+- **AI Insights**: Generate actionable insights using Google Gemini LLM
+- **Problem Identification**: Map calls to known problems with actionables
+- **Tone Analysis**: Analyze both seller and executive tones
+- **Segment-Aware**: Provide segment-specific recommendations
 
-## 🎯 Problem Statement
-
-IndiaMART handles millions of sales, service, onboarding, payment, and support calls. Each call contains valuable signals: customer needs, product issues, objections, behavioral trends, common failures, and opportunities. This system extracts actionable insights from these call transcripts.
-
----
-
-## 📁 Project Structure
-
-```
-IMH/
-├── main.py                 # Main entry point - run pipeline
-├── app.py                  # Streamlit dashboard
-├── requirements.txt        # Python dependencies
-├── README.md               # This file
-│
-├── src/                    # Source code
-│   ├── __init__.py
-│   ├── config.py           # Configuration & categories
-│   ├── classifiers/        # Gemini classification
-│   │   ├── __init__.py
-│   │   └── gemini_classifier.py
-│   ├── aggregators/        # Insights aggregation
-│   │   ├── __init__.py
-│   │   └── insights_aggregator.py
-│   └── utils/              # Utility functions
-│       ├── __init__.py
-│       ├── data_loader.py
-│       └── helpers.py
-│
-├── scripts/                # Standalone scripts
-│   ├── run_demo.py         # 5 use case demo
-│   └── explore_data.py     # Data exploration
-│
-├── data/                   # Input data (put Excel file here)
-├── output/                 # Generated outputs
-└── checkpoints/            # Batch processing checkpoints
-```
-
----
-
-## 🚀 Quick Start
+## Setup
 
 ### 1. Install Dependencies
 
-```powershell
-pip install -r requirements.txt
+```bash
+pip install streamlit pandas openpyxl requests google-generativeai python-dotenv
 ```
 
-### 2. API Key Configuration
+### 2. Configure API Keys
 
-The NVIDIA NIM API key is pre-configured in `src/config.py`. 
+Create a `.env` file in the project root:
 
-To use your own key, either:
-```powershell
-# Option 1: Set environment variable
-$env:NVIDIA_API_KEY = "your_api_key_here"
+```bash
+# Google Gemini API Key for Insights Engine
+GEMINI_API_KEY=your_gemini_api_key_here
 
-# Option 2: Update src/config.py directly
+# Custom LLM API Endpoint (for IndiaMART's internal LLM)
+API_BASE_URL_FOR_CLIENT=https://imllm.intermesh.net
 ```
 
-### 3. Run the Pipeline
+**Get a Gemini API key:**
+1. Go to https://makersuite.google.com/app/apikey
+2. Click "Create API Key"
+3. Copy the key and paste it in `.env`
 
-```powershell
-# Quick test (5 samples) - No API key needed
-python main.py --mode quick-insights
+### 3. Ensure Data Files
 
-# Sample classification (10 calls)
-python main.py --mode sample --sample-size 10
+Make sure these files exist in the `datasets/` folder:
+- `datasets/Data Voice Hackathon_Master-1.xlsx` - Main dataset
+- `datasets/enhanced_segments.xlsx` - Business segment data
+- `datasets/Problem_Actionable_Final.xlsx` - Problem definitions with actionables
 
-# Full demo with 5 diverse use cases
-python main.py --mode demo
+### 4. Start the Application
 
-# Process all 5,600+ calls
-python main.py --mode full
+```bash
+bash start_streamlit.sh
 ```
 
-### 4. Launch Agent Pipeline (Interactive)
+Or directly:
 
-```powershell
-python agent_pipeline.py
-```
-
-### 5. Launch GUI Application
-
-```powershell
-python gui_app.py
-```
-
-### 6. Launch Web Dashboard
-
-```powershell
+```bash
 streamlit run app.py
 ```
 
----
+The app will be available at `http://localhost:8501`
 
-## 🤖 Agent Pipeline
+## Usage
 
-The **Agent Pipeline** provides an interactive, LLM-powered interface for transcript analysis.
+### Translate a Call
 
-### Usage Options
+1. Enter a **Call ID** (click_to_call_id)
+2. Click **"Fetch & Translate Call"**
+3. View the translated conversation
 
-```powershell
-# Interactive mode (menu-driven)
-python agent_pipeline.py
+### Generate Insights
 
-# Analyze by customer type
-python agent_pipeline.py --type CATALOG --sample-size 30
+1. After translation completes, click **"🔍 Generate Insights"**
+2. Wait for AI analysis (5-10 seconds)
+3. Review insights in expandable sections:
+   - **Identified Problems & Actionables**
+   - **Seller Tone Analysis**
+   - **Executive Performance Analysis**
+   - **Segment-Specific Insights**
 
-# Analyze by city/location
-python agent_pipeline.py --city "Makrana" --sample-size 30
+## Insights Output Structure
 
-# Analyze by customer ID
-python agent_pipeline.py --customer 12345
+The insights engine provides:
 
-# Analyze a single transcript
-python agent_pipeline.py --transcript
+### Problems Identified
+- Problem name from reference list
+- Evidence from transcript
+- Specific actionables
+
+### Seller Tone Analysis
+- Sentiment (Positive/Neutral/Negative)
+- Churn Risk Signal
+- Upsell Readiness
+- Issue Severity
+- Engagement Level
+- Trust & Rapport Score
+- Emotional Triggers
+- Outcome Prediction
+- Follow-up Willingness
+
+### Executive Tone Analysis
+- Empathy & Professionalism
+- Clarity & Confidence
+- Persuasion Effectiveness
+- Problem-Solving Orientation
+- Rapport-Building Strength
+
+### Segment-Specific Insights
+- Segment relevance
+- Common patterns for this segment
+- Segment-specific recommendations
+
+## Problem Reference List
+
+The system includes 13 pre-defined problem categories:
+
+1. Low BuyLead Quality
+2. Payment & Billing Issues
+3. Catalog Ranking Issues
+4. Subscription Renewal Concerns
+5. Technical Issues
+6. BuyLead Consumption Issues
+7. Seller Education Needed
+8. Onboarding & Verification Issues
+9. Churn Risk Signal
+10. Service Escalation
+11. Upsell Opportunity
+12. Positive Feedback
+13. Follow-up Required
+
+Each problem has specific actionables for the servicing team.
+
+## Architecture
+
+```
+app.py                          # Main Streamlit interface
+├── src/
+│   ├── insights_engine.py      # LLM insights generation
+│   ├── config.py               # Configuration
+│   └── ui/
+│       └── transcription_section.py  # Translation UI
+├── datasets/
+│   ├── Problem_Actionable_Final.xlsx  # Problem definitions
+│   ├── enhanced_segments.xlsx         # Business segments
+│   └── Data Voice Hackathon_Master-1.xlsx  # Main dataset
+└── output/
+    └── transcripts/            # Cached translations
 ```
 
-### Agent Capabilities
+## Anti-Hallucination Measures
 
-| Agent | Function |
-|-------|----------|
-| **InsightsAgent** | Analyzes individual transcripts, answers questions, extracts action items |
-| **AggregationAgent** | Aggregates insights across multiple transcripts by customer/location/type |
+The insights engine is designed to prevent hallucinations:
 
-### Interactive Mode Features
+- ✅ Uses only information from transcript, segment, and problem reference
+- ✅ Returns "insufficient evidence" when uncertain
+- ✅ Never invents problems or actionables
+- ✅ Strictly follows structured JSON output
+- ✅ Evidence-based insights only
 
-1. **📝 Single Transcript Analysis** - Paste any transcript and get instant insights
-2. **👤 Customer Analysis** - Aggregate all calls for a specific customer
-3. **📍 Location Analysis** - Analyze patterns for a specific city
-4. **👥 Customer Type Analysis** - Insights for CATALOG, TSCATALOG, STAR, etc.
-5. **🔍 Keyword Search** - Find and analyze transcripts containing specific keywords
-6. **💬 Follow-up Questions** - Ask the AI questions about analyzed transcripts
+## Customization
 
----
+### Add New Problems
 
-## 🏷️ Classification Categories (14 Total)
-
-| Category | Description |
-|----------|-------------|
-| LEAD_QUALITY | Fake/irrelevant leads complaints |
-| PAYMENT_BILLING | Refunds, invoices, pricing issues |
-| CATALOG_MANAGEMENT | Product listing, images, descriptions |
-| SUBSCRIPTION_RENEWAL | Renewals, upgrades, plan queries |
-| TECHNICAL_ISSUES | App/website bugs, login problems |
-| BUYLEAD_CONSUMPTION | Credits, consumption, deductions |
-| ACCOUNT_MANAGEMENT | Profile, GST, verification |
-| SERVICE_ESCALATION | Escalated complaints |
-| ONBOARDING_TRAINING | New customer guidance |
-| CANCELLATION_CHURN | Churn signals, cancellation requests |
-| COMPETITOR_MENTION | Competitor comparisons |
-| POSITIVE_FEEDBACK | Customer appreciation |
-| FOLLOW_UP_REQUIRED | Pending actions needed |
-| MISCELLANEOUS | Other issues |
-
----
-
-## 📊 What Gets Extracted
-
-For each call transcript, the system extracts:
+Edit `problem_reference.json`:
 
 ```json
 {
-  "primary_category": "LEAD_QUALITY",
-  "secondary_categories": ["SUBSCRIPTION_RENEWAL"],
-  "issue_summary": "Customer complains about irrelevant leads",
-  "customer_pain_points": ["Getting leads from wrong city"],
-  "resolution_status": "PARTIALLY_RESOLVED",
-  "sentiment": "NEGATIVE",
-  "sentiment_shift": "IMPROVED",
-  "urgency": "HIGH",
-  "churn_risk": "MEDIUM",
-  "executive_performance": {
-    "empathy_shown": true,
-    "solution_offered": true,
-    "followed_process": true,
-    "escalation_needed": false
-  },
-  "actionable_insight": "Implement city-level lead filtering",
-  "requires_follow_up": true,
-  "follow_up_reason": "Customer expects callback"
+  "problem_name": "Your Problem",
+  "description": "Description",
+  "keywords": ["keyword1", "keyword2"],
+  "actionables": ["Action 1", "Action 2"]
 }
 ```
 
----
+### Change LLM Model
 
-## 💡 Key Insights Generated
+Edit `src/insights_engine.py`:
 
-### From Quick Analysis (No API Required)
+```python
+# Change from gemini-pro to another model
+self.model = genai.GenerativeModel('gemini-1.5-pro')
+```
 
-| Metric | Value |
-|--------|-------|
-| Total Calls | 5,630 |
-| Alert Calls | 634 (11.3%) |
-| Repeat Ticket Rate | 37% |
+## Troubleshooting
 
-### Top Issues Mentioned
-1. **BuyLeads** - 1,744 mentions
-2. **Subscription** - 664 mentions
-3. **Refund** - 497 mentions
-4. **Catalog** - 415 mentions
-5. **WhatsApp** - 305 mentions
+### "Insights engine not available"
+- Install dependencies: `pip install google-generativeai python-dotenv`
 
----
+### "API key not found"
+- Create `.env` file with `GEMINI_API_KEY`
 
-## 🎯 Actionable Recommendations
+### "Failed to parse LLM response"
+- LLM returned invalid JSON
+- Check raw response in error details
+- May need to refine prompt
 
-1. **🔥 Address BuyLead Quality** - 30%+ calls mention lead issues
-2. **🔄 Reduce 37% Repeat Rate** - Focus on first-call resolution
-3. **💰 Automate Refunds** - Self-service for eligible cases
-4. **📍 Geographic Focus** - Dedicated support for high-volume cities
-5. **⚠️ Churn Prevention** - Proactive outreach for at-risk customers
+### "Sarvam API Offline"
+- Ensure Sarvam translation server is running on port 8888
 
----
+## License
 
-## 🛠️ Tech Stack
-
-- **AI Model**: NVIDIA NIM Nemotron-4-Mini-Hindi-4B-Instruct
-  - Specifically optimized for Hindi/Hinglish text
-  - OpenAI-compatible API interface
-- **Language**: Python 3.10+
-- **Dashboard**: Streamlit + Plotly
-- **Data Processing**: Pandas
-- **API Client**: OpenAI Python SDK
-- **Rate Limiting**: Tenacity (auto-retry)
-
----
-
-## 📈 Output Files
-
-After running the pipeline:
-
-| File | Description |
-|------|-------------|
-| `output/classified_*.csv` | All calls with AI classifications |
-| `output/insights_*.json` | Aggregated business insights |
-| `output/demo_results_*.json` | Demo use case results |
-| `checkpoints/batch_*.json` | Batch processing checkpoints |
-
----
-
-## 👥 Team
-
-Data Voice Hackathon 2024
-
----
-
-## 📝 License
-
-MIT License - Feel free to use and modify.
-
+MIT License - IndiaMART Voice Call Hackathon 2025
