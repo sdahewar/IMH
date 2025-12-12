@@ -1,11 +1,11 @@
 """
 IndiaMART Insights Engine - GUI Application
-Simple Python GUI using Tkinter for transcript analysis
+Desktop GUI using Tkinter for call translation and analysis
 
 Features:
-- Input: Text transcript OR Audio file (Vosk STT)
+- Input: Call ID (click_to_call_id)
+- Translation: Sarvam AI Translation API
 - Analysis: NVIDIA NIM LLM insights extraction
-- Batch: Multiple transcripts or audio files
 
 Run with: python gui_app.py
 """
@@ -14,6 +14,7 @@ import os
 import sys
 import json
 import threading
+import requests
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
@@ -24,6 +25,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.agents import InsightsAgent, AggregationAgent
 from src.config import NVIDIA_MODEL, OUTPUT_DIR
+from src.ui.transcription_section import (
+    fetch_call_by_id,
+    transcribe_call,
+    save_transcript_locally,
+    load_cached_transcript
+)
+
+# Sarvam API Configuration
+SARVAM_API_URL = "http://localhost:8888/translate"
+TRANSCRIPTS_DIR = "output/transcripts"
 
 
 class InsightsEngineGUI:
@@ -31,14 +42,15 @@ class InsightsEngineGUI:
         self.root = root
         self.root.title("IndiaMART Insights Engine")
         self.root.geometry("1200x850")
-        self.root.configure(bg='#1a1a2e')
+        self.root.configure(bg='#faf8f3')  # Cream background
         
         # Data
         self.df = None
         self.insights_agent = None
         self.aggregation_agent = None
         self.current_result = None
-        self.vosk_stt = None  # Will be loaded on demand
+        self.current_translation = None  # Store translation results
+        self.current_call_data = None  # Store current call metadata
         
         # Style configuration
         self.setup_styles()
@@ -56,55 +68,59 @@ class InsightsEngineGUI:
         style = ttk.Style()
         style.theme_use('clam')
         
-        # Colors
+        # Colors - Purple and Cream theme
         self.colors = {
-            'bg_dark': '#1a1a2e',
-            'bg_medium': '#16213e',
-            'bg_light': '#0f3460',
-            'accent': '#e94560',
-            'text': '#eaeaea',
-            'text_dim': '#a0a0a0',
+            'bg_cream': '#faf8f3',
+            'bg_white': '#ffffff',
+            'purple_dark': '#6b46c1',
+            'purple_medium': '#805ad5',
+            'text_dark': '#2d3748',
+            'text_dim': '#718096',
             'success': '#00d26a',
             'warning': '#ffc107',
             'error': '#dc3545'
         }
         
         style.configure('Header.TLabel', 
-                       background=self.colors['bg_dark'], 
-                       foreground=self.colors['accent'],
+                       background=self.colors['bg_cream'], 
+                       foreground=self.colors['purple_dark'],
                        font=('Segoe UI', 24, 'bold'))
         
         style.configure('SubHeader.TLabel',
-                       background=self.colors['bg_dark'],
+                       background=self.colors['bg_cream'],
                        foreground=self.colors['text_dim'],
                        font=('Segoe UI', 10))
         
         style.configure('TButton',
                        font=('Segoe UI', 10),
-                       padding=10)
+                       padding=10,
+                       relief='flat')
         
         style.configure('Accent.TButton',
-                       background=self.colors['accent'],
+                       background=self.colors['purple_dark'],
                        foreground='white',
-                       font=('Segoe UI', 10, 'bold'))
+                       font=('Segoe UI', 10, 'bold'),
+                       relief='flat')
         
         style.configure('TNotebook',
-                       background=self.colors['bg_dark'])
+                       background=self.colors['bg_cream'])
         
         style.configure('TNotebook.Tab',
                        font=('Segoe UI', 10),
                        padding=[15, 5])
         
         style.configure('TFrame',
-                       background=self.colors['bg_dark'])
+                       background=self.colors['bg_cream'])
         
         style.configure('TLabelframe',
-                       background=self.colors['bg_dark'],
-                       foreground=self.colors['text'])
+                       background=self.colors['bg_cream'],
+                       foreground=self.colors['purple_dark'],
+                       relief='flat',
+                       borderwidth=1)
         
         style.configure('TLabelframe.Label',
-                       background=self.colors['bg_dark'],
-                       foreground=self.colors['accent'],
+                       background=self.colors['bg_cream'],
+                       foreground=self.colors['purple_dark'],
                        font=('Segoe UI', 11, 'bold'))
     
     def create_header(self):
@@ -144,107 +160,78 @@ class InsightsEngineGUI:
         self.create_results_tab()
     
     def create_single_analysis_tab(self):
-        """Create single transcript/audio analysis tab"""
+        """Create single call translation tab"""
         tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="📝 Single Analysis")
+        self.notebook.add(tab, text="Call Translation")
         
         # Left panel - Input
-        left_frame = ttk.LabelFrame(tab, text="Input (Text or Audio)", padding=10)
+        left_frame = ttk.LabelFrame(tab, text="Call Translation Input", padding=10)
         left_frame.pack(side='left', fill='both', expand=True, padx=10, pady=10)
         
-        # Input type selection
-        input_type_frame = ttk.Frame(left_frame)
-        input_type_frame.pack(fill='x', pady=5)
+        # Call ID input
+        id_frame = ttk.Frame(left_frame)
+        id_frame.pack(fill='x', pady=10)
         
-        self.input_type_var = tk.StringVar(value="text")
+        ttk.Label(id_frame, text="Call ID (click_to_call_id):").pack(anchor='w')
+        self.call_id_var = tk.StringVar()
+        call_id_entry = ttk.Entry(id_frame, textvariable=self.call_id_var, width=30, font=('Segoe UI', 11))
+        call_id_entry.pack(fill='x', pady=5)
+        call_id_entry.bind('<Return>', lambda e: self.fetch_and_translate())
         
-        ttk.Radiobutton(input_type_frame, text="📝 Text Transcript", 
-                       variable=self.input_type_var, value="text",
-                       command=self.toggle_input_type).pack(side='left', padx=10)
-        ttk.Radiobutton(input_type_frame, text="🎤 Audio File", 
-                       variable=self.input_type_var, value="audio",
-                       command=self.toggle_input_type).pack(side='left', padx=10)
+        # Sarvam API status
+        self.api_status_label = ttk.Label(left_frame, 
+                                         text="Sarvam API: Checking...",
+                                         foreground='#ffc107')
+        self.api_status_label.pack(anchor='w', pady=5)
         
-        # Text input frame
-        self.text_input_frame = ttk.Frame(left_frame)
-        self.text_input_frame.pack(fill='both', expand=True, pady=5)
+        # Check API status on startup
+        self.root.after(500, self.check_api_status)
         
-        self.transcript_input = scrolledtext.ScrolledText(
-            self.text_input_frame, 
-            width=50, 
-            height=15,
-            font=('Consolas', 10),
-            bg='#16213e',
-            fg='#eaeaea',
-            insertbackground='white'
-        )
-        self.transcript_input.pack(fill='both', expand=True)
-        self.transcript_input.insert('1.0', 'Paste your transcript here...')
-        self.transcript_input.bind('<FocusIn>', self.clear_placeholder)
+        # Translate button
+        translate_btn = ttk.Button(left_frame, text="Fetch & Translate Call",
+                                  command=self.fetch_and_translate,
+                                  style='Accent.TButton')
+        translate_btn.pack(pady=10)
         
-        # Audio input frame (initially hidden)
-        self.audio_input_frame = ttk.Frame(left_frame)
-        
-        # Audio file selection
-        audio_file_frame = ttk.Frame(self.audio_input_frame)
-        audio_file_frame.pack(fill='x', pady=10)
-        
-        self.audio_path_var = tk.StringVar(value="No audio file selected")
-        ttk.Label(audio_file_frame, text="🎤 Audio File:").pack(side='left')
-        ttk.Label(audio_file_frame, textvariable=self.audio_path_var, 
-                 foreground='#a0a0a0').pack(side='left', padx=10)
-        ttk.Button(audio_file_frame, text="Browse...", 
-                  command=self.browse_audio_file).pack(side='right')
-        
-        # Audio info
-        self.audio_info_label = ttk.Label(self.audio_input_frame, 
-                                         text="Supported formats: MP3, WAV, M4A, OGG",
-                                         foreground='#a0a0a0')
-        self.audio_info_label.pack(anchor='w', pady=5)
-        
-        # STT status
-        self.stt_status_label = ttk.Label(self.audio_input_frame, 
-                                         text="🔊 Vosk STT: Ready (vosk-model-hi-0.22)",
-                                         foreground='#00d26a')
-        self.stt_status_label.pack(anchor='w', pady=5)
-        
-        # Transcribed text preview
-        ttk.Label(self.audio_input_frame, text="📝 Transcribed Text (Preview):").pack(anchor='w', pady=(10, 0))
-        self.transcribed_preview = scrolledtext.ScrolledText(
-            self.audio_input_frame,
-            width=50,
-            height=10,
-            font=('Consolas', 9),
-            bg='#16213e',
-            fg='#eaeaea',
-            state='disabled'
-        )
-        self.transcribed_preview.pack(fill='both', expand=True, pady=5)
-        
-        # Transcribe button
-        self.transcribe_btn = ttk.Button(self.audio_input_frame, text="🎤 Transcribe Audio",
-                                        command=self.transcribe_audio)
-        self.transcribe_btn.pack(pady=5)
-        
-        # Metadata frame
-        meta_frame = ttk.Frame(left_frame)
+        # Call metadata display
+        meta_frame = ttk.LabelFrame(left_frame, text="Call Metadata", padding=10)
         meta_frame.pack(fill='x', pady=10)
         
-        ttk.Label(meta_frame, text="Customer Type:").pack(side='left')
-        self.cust_type_var = tk.StringVar(value="CATALOG")
-        cust_type_combo = ttk.Combobox(meta_frame, textvariable=self.cust_type_var, width=15)
-        cust_type_combo['values'] = ('CATALOG', 'TSCATALOG', 'STAR', 'LEADER', 'FREELIST')
-        cust_type_combo.pack(side='left', padx=5)
+        self.meta_text = scrolledtext.ScrolledText(
+            meta_frame,
+            width=40,
+            height=8,
+            font=('Segoe UI', 9),
+            bg='#ffffff',
+            fg='#2d3748',
+            relief='solid',
+            borderwidth=1,
+            state='disabled'
+        )
+        self.meta_text.pack(fill='both', expand=True)
         
-        ttk.Label(meta_frame, text="City:").pack(side='left', padx=(20, 0))
-        self.city_var = tk.StringVar(value="")
-        city_entry = ttk.Entry(meta_frame, textvariable=self.city_var, width=20)
-        city_entry.pack(side='left', padx=5)
+        # Translation preview
+        preview_frame = ttk.LabelFrame(left_frame, text="Translation Preview", padding=10)
+        preview_frame.pack(fill='both', expand=True, pady=10)
         
-        # Analyze button
-        analyze_btn = ttk.Button(left_frame, text="🔍 Analyze with LLM", 
-                                command=self.analyze_input)
-        analyze_btn.pack(pady=10)
+        self.translation_preview = scrolledtext.ScrolledText(
+            preview_frame,
+            width=40,
+            height=12,
+            font=('Segoe UI', 10),
+            bg='#ffffff',
+            fg='#2d3748',
+            relief='solid',
+            borderwidth=1,
+            state='disabled',
+            wrap='word'
+        )
+        self.translation_preview.pack(fill='both', expand=True)
+        
+        # Analyze translated text button
+        analyze_btn = ttk.Button(left_frame, text="Analyze Translation with LLM",
+                                command=self.analyze_translation)
+        analyze_btn.pack(pady=5)
         
         # Right panel - Results
         right_frame = ttk.LabelFrame(tab, text="Analysis Results", padding=10)
@@ -255,8 +242,11 @@ class InsightsEngineGUI:
             width=50,
             height=25,
             font=('Consolas', 10),
-            bg='#16213e',
-            fg='#eaeaea'
+            bg='#f5f1e8',
+            fg='#2d3748',
+            relief='solid',
+            borderwidth=1,
+            wrap='word'
         )
         self.single_result_text.pack(fill='both', expand=True)
         
@@ -273,124 +263,171 @@ class InsightsEngineGUI:
         ask_btn = ttk.Button(q_frame, text="Ask", command=self.ask_question)
         ask_btn.pack(side='left', padx=5)
     
-    def toggle_input_type(self):
-        """Toggle between text and audio input"""
-        input_type = self.input_type_var.get()
+    
+    def check_api_status(self):
+        """Check if Sarvam API is accessible"""
+        try:
+            response = requests.get(SARVAM_API_URL.replace('/translate', '/health'), timeout=2)
+            self.api_status_label.config(text="Sarvam API: ● Online", foreground='#00d26a')
+        except:
+            self.api_status_label.config(text="Sarvam API: ● Offline", foreground='#dc3545')
+    
+    def fetch_and_translate(self):
+        """Fetch call by ID and translate using Sarvam API - replicates app.py logic"""
+        call_id = self.call_id_var.get().strip()
         
-        if input_type == "text":
-            self.audio_input_frame.pack_forget()
-            self.text_input_frame.pack(fill='both', expand=True, pady=5)
-        else:
-            self.text_input_frame.pack_forget()
-            self.audio_input_frame.pack(fill='both', expand=True, pady=5)
-    
-    def browse_audio_file(self):
-        """Browse for audio file"""
-        filepath = filedialog.askopenfilename(
-            filetypes=[
-                ("Audio files", "*.mp3 *.wav *.m4a *.ogg *.flac"),
-                ("MP3 files", "*.mp3"),
-                ("WAV files", "*.wav"),
-                ("All files", "*.*")
-            ]
-        )
-        if filepath:
-            self.audio_path_var.set(os.path.basename(filepath))
-            self.selected_audio_path = filepath
-            self.update_status(f"Audio file selected: {os.path.basename(filepath)}")
-    
-    def get_vosk_stt(self):
-        """Initialize Vosk STT on demand"""
-        if self.vosk_stt is None:
-            try:
-                from src.stt import VoskSTT
-                self.stt_status_label.config(text="⏳ Loading Vosk model...", foreground='#ffc107')
-                self.root.update_idletasks()
-                
-                self.vosk_stt = VoskSTT(model_path="vosk-model-hi-0.22", verbose=False)
-                self.stt_status_label.config(text="✅ Vosk STT: Ready", foreground='#00d26a')
-            except Exception as e:
-                self.stt_status_label.config(text=f"❌ Vosk error: {str(e)}", foreground='#dc3545')
-                return None
-        return self.vosk_stt
-    
-    def transcribe_audio(self):
-        """Transcribe audio file using Vosk"""
-        if not hasattr(self, 'selected_audio_path') or not self.selected_audio_path:
-            messagebox.showwarning("Warning", "Please select an audio file first")
+        if not call_id:
+            messagebox.showwarning("Warning", "Please enter a Call ID")
             return
         
-        self.update_status("Transcribing audio...")
-        self.transcribe_btn.config(state='disabled')
+        if self.df is None:
+            messagebox.showerror("Error", "Dataset not loaded. Please wait for data to load.")
+            return
         
-        # Enable and clear preview
-        self.transcribed_preview.config(state='normal')
-        self.transcribed_preview.delete('1.0', 'end')
-        self.transcribed_preview.insert('end', "🔄 Transcribing audio...\n\nPlease wait, this may take a moment.")
-        self.transcribed_preview.config(state='disabled')
+        self.update_status(f"Fetching call {call_id}...")
+        
+        # Clear previous data
+        self.meta_text.config(state='normal')
+        self.meta_text.delete('1.0', 'end')
+        self.meta_text.insert('end', "Fetching call data...")
+        self.meta_text.config(state='disabled')
+        
+        self.translation_preview.config(state='normal')
+        self.translation_preview.delete('1.0', 'end')
+        self.translation_preview.insert('end', "Waiting for call data...")
+        self.translation_preview.config(state='disabled')
+        
         self.root.update_idletasks()
         
-        def transcribe():
+        def translate():
             try:
-                stt = self.get_vosk_stt()
-                if stt is None:
-                    self.root.after(0, lambda: messagebox.showerror("Error", "Failed to load Vosk STT"))
+                # Fetch call from dataset using function from transcription_section.py
+                call_row = fetch_call_by_id(self.df, call_id)
+                
+                if call_row is None:
+                    self.root.after(0, lambda: messagebox.showerror("Error", f"No call found with ID: {call_id}"))
+                    self.root.after(0, lambda: self.update_status("Call not found"))
                     return
                 
-                result = stt.transcribe(self.selected_audio_path)
-                transcript = result.get('transcript', '')
-                duration = result.get('duration', 0)
+                self.current_call_data = call_row
                 
-                self.current_transcript = transcript
+                # Display metadata
+                def show_metadata():
+                    self.meta_text.config(state='normal')
+                    self.meta_text.delete('1.0', 'end')
+                    meta_info = f"""Call ID: {call_id}
+Duration: {call_row.get('call_duration', 'N/A')}s
+Direction: {call_row.get('FLAG_IN_OUT', 'N/A')}
+City: {call_row.get('city_name', 'N/A')}
+Customer Type: {call_row.get('customer_type', 'N/A')}
+GLID: {call_row.get('glid', 'N/A')}
+Date: {call_row.get('call_entered_on', 'N/A')}"""
+                    self.meta_text.insert('end', meta_info)
+                    self.meta_text.config(state='disabled')
+                
+                self.root.after(0, show_metadata)
+                
+                # Get audio URL
+                audio_url = str(call_row.get('call_recording_url', ''))
+                
+                if not audio_url or audio_url == 'nan':
+                    self.root.after(0, lambda: messagebox.showerror("Error", "No audio recording URL found for this call"))
+                    self.root.after(0, lambda: self.update_status("No audio URL"))
+                    return
                 
                 # Update preview
-                def update_preview():
-                    self.transcribed_preview.config(state='normal')
-                    self.transcribed_preview.delete('1.0', 'end')
-                    self.transcribed_preview.insert('end', f"Duration: {duration:.1f}s\n\n{transcript}")
-                    self.transcribed_preview.config(state='disabled')
-                    self.transcribe_btn.config(state='normal')
-                    self.update_status(f"Transcription complete: {len(transcript)} characters")
+                def show_translating():
+                    self.translation_preview.config(state='normal')
+                    self.translation_preview.delete('1.0', 'end')
+                    self.translation_preview.insert('end', "Translating audio... This may take a few seconds")
+                    self.translation_preview.config(state='disabled')
                 
-                self.root.after(0, update_preview)
+                self.root.after(0, show_translating)
+                self.root.after(0, lambda: self.update_status("Translating audio..."))
+                
+                # Check cache first
+                cached_transcript = load_cached_transcript(
+                    str(call_row.get('glid', '')),
+                    call_id
+                )
+                
+                if cached_transcript:
+                    transcript_data = cached_transcript
+                    self.root.after(0, lambda: self.update_status("Using cached translation"))
+                else:
+                    # Call Sarvam API using function from transcription_section.py
+                    transcript_data = transcribe_call(audio_url)
+                    
+                    # Save to cache if successful
+                    if transcript_data.get('status') == 'success':
+                        save_transcript_locally(
+                            str(call_row.get('glid', '')),
+                            str(call_row.get('call_entered_on', '')),
+                            call_id,
+                            transcript_data
+                        )
+                
+                self.current_translation = transcript_data
+                
+                # Display translation
+                def show_translation():
+                    self.translation_preview.config(state='normal')
+                    self.translation_preview.delete('1.0', 'end')
+                    
+                    if transcript_data.get('status') == 'success':
+                        language_code = transcript_data.get('language_code', 'Unknown')
+                        self.translation_preview.insert('end', f"Language: {language_code}\\n\\n")
+                        
+                        speakers = transcript_data.get('speakers', [])
+                        if speakers:
+                            for speaker in speakers:
+                                speaker_id = speaker.get('speaker_id', 'Unknown')
+                                text = speaker.get('text', '')
+                                self.translation_preview.insert('end', f"{speaker_id}:\\n{text}\\n\\n")
+                        else:
+                            self.translation_preview.insert('end', "No speaker data available")
+                    else:
+                        error_msg = transcript_data.get('message', 'Unknown error')
+                        self.translation_preview.insert('end', f"Translation Failed:\\n{error_msg}")
+                    
+                    self.translation_preview.config(state='disabled')
+                    self.update_status("Translation complete")
+                
+                self.root.after(0, show_translation)
                 
             except Exception as e:
-                self.root.after(0, lambda: self.transcribed_preview.config(state='normal'))
-                self.root.after(0, lambda: self.transcribed_preview.delete('1.0', 'end'))
-                self.root.after(0, lambda: self.transcribed_preview.insert('end', f"❌ Error: {str(e)}"))
-                self.root.after(0, lambda: self.transcribed_preview.config(state='disabled'))
-                self.root.after(0, lambda: self.transcribe_btn.config(state='normal'))
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Translation error: {str(e)}"))
                 self.root.after(0, lambda: self.update_status(f"Error: {str(e)}"))
         
-        threading.Thread(target=transcribe, daemon=True).start()
+        threading.Thread(target=translate, daemon=True).start()
     
-    def analyze_input(self):
-        """Analyze either text or audio input"""
-        input_type = self.input_type_var.get()
-        
-        if input_type == "text":
-            self.analyze_text_transcript()
-        else:
-            self.analyze_audio_transcript()
-    
-    def analyze_text_transcript(self):
-        """Analyze text transcript"""
-        transcript = self.transcript_input.get('1.0', 'end-1c').strip()
-        
-        if not transcript or transcript == 'Paste your transcript here...':
-            messagebox.showwarning("Warning", "Please enter a transcript to analyze")
+    def analyze_translation(self):
+        """Analyze the translated text with NVIDIA NIM"""
+        if self.current_translation is None:
+            messagebox.showwarning("Warning", "Please translate a call first")
             return
         
-        self.current_transcript = transcript
-        self.run_llm_analysis(transcript)
-    
-    def analyze_audio_transcript(self):
-        """Analyze transcribed audio"""
-        if not hasattr(self, 'current_transcript') or not self.current_transcript:
-            messagebox.showwarning("Warning", "Please transcribe an audio file first")
+        if self.current_translation.get('status') != 'success':
+            messagebox.showerror("Error", "Translation failed. Cannot analyze.")
             return
         
-        self.run_llm_analysis(self.current_transcript)
+        # Extract full transcript text
+        speakers = self.current_translation.get('speakers', [])
+        if not speakers:
+            messagebox.showwarning("Warning", "No transcript data to analyze")
+            return
+        
+        # Combine all speaker text
+        transcript_lines = []
+        for speaker in speakers:
+            speaker_id = speaker.get('speaker_id', 'Unknown')
+            text = speaker.get('text', '')
+            transcript_lines.append(f"{speaker_id}: {text}")
+        
+        full_transcript = "\\n".join(transcript_lines)
+        
+        # Run LLM analysis
+        self.run_llm_analysis(full_transcript)
     
     def run_llm_analysis(self, transcript):
         """Run LLM analysis on transcript"""

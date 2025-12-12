@@ -11,11 +11,9 @@ import pandas as pd
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-
 # Sarvam AI API Configuration
 SARVAM_API_URL = "http://localhost:8888/translate"
 TRANSCRIPTS_DIR = "output/transcripts"
-
 
 def fetch_calls_for_glid(df: pd.DataFrame, glid: str) -> pd.DataFrame:
     """
