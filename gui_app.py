@@ -668,7 +668,7 @@ Transcript 3 content here...""")
         self.update_status("Loading data...")
         
         try:
-            paths = ["Data Voice Hackathon_Master.xlsx", "data/Data Voice Hackathon_Master.xlsx"]
+            paths = ["Data Voice Hackathon_Master-1.xlsx", "data/Data Voice Hackathon_Master-1.xlsx"]
             for path in paths:
                 if os.path.exists(path):
                     self.df = pd.read_excel(path)

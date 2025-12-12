@@ -36,8 +36,7 @@ def print_banner():
 ╚══════════════════════════════════════════════════════════════════════════════╝
     """)
 
-
-def load_data(filepath: str = "Data Voice Hackathon_Master.xlsx") -> pd.DataFrame:
+def load_data(filepath: str = "Data Voice Hackathon_Master-1.xlsx") -> pd.DataFrame:
     """Load the dataset"""
     paths_to_try = [filepath, f"data/{filepath}"]
     
@@ -178,7 +177,7 @@ def analyze_by_city(df: pd.DataFrame, city: str, agent: AggregationAgent):
     result = agent.aggregate_by_location(df, city)
     
     if 'error' in result:
-        print(f"❌ {result['error']}")
+        print(f" {result['error']}")
         return
     
     print_aggregated_results(result)
@@ -395,7 +394,7 @@ def main():
     parser.add_argument("--city", type=str, help="Analyze by city name")
     parser.add_argument("--type", type=str, help="Analyze by customer type")
     parser.add_argument("--sample-size", type=int, default=30, help="Sample size for analysis")
-    parser.add_argument("--input", default="Data Voice Hackathon_Master.xlsx", help="Input data file")
+    parser.add_argument("--input", default="Data Voice Hackathon_Master-1.xlsx", help="Input data file")
     
     args = parser.parse_args()
     

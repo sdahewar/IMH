@@ -42,6 +42,30 @@ def fetch_calls_for_glid(df: pd.DataFrame, glid: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def fetch_call_by_id(df: pd.DataFrame, click_to_call_id: str) -> Optional[pd.Series]:
+    """
+    Fetch a single call by click_to_call_id
+    
+    Args:
+        df: Full dataset DataFrame
+        click_to_call_id: Call ID to fetch
+        
+    Returns:
+        Single row as Series or None if not found
+    """
+    try:
+        # Try to match as string or int
+        call = df[df['click_to_call_id'].astype(str) == str(click_to_call_id)]
+        
+        if len(call) > 0:
+            return call.iloc[0]
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Error fetching call: {str(e)}")
+        return None
+
+
 def transcribe_call(audio_url: str, timeout: int = 120) -> Dict[str, Any]:
     """
     Call Sarvam AI Translation API to transcribe audio
@@ -363,3 +387,175 @@ def render_transcription_ui(df: pd.DataFrame):
         st.info(f"**{total_cached}** transcripts cached locally in `{TRANSCRIPTS_DIR}/`")
     else:
         st.info("No cached transcripts yet")
+
+
+def render_call_translation_ui(df: pd.DataFrame):
+    """
+    Simplified UI for single call translation using click_to_call_id
+    
+    Args:
+        df: Full dataset DataFrame
+    """
+    
+    # Check if Sarvam API is accessible
+    try:
+        health_check = requests.get(SARVAM_API_URL.replace('/translate', '/health'), timeout=2)
+        api_status = "Online"
+        api_color = "#28a745"
+    except:
+        api_status = "Offline"
+        api_color = "#dc3545"
+    
+    # API Status indicator
+    st.markdown(f"""
+        <div style='text-align: center; margin: 20px 0;'>
+            <span style='color: {api_color}; font-weight: 600;'>Sarvam API Status: {api_status}</span>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Input section
+    call_id_input = st.text_input(
+        "",
+        placeholder="Enter Call ID (e.g., 12345678)",
+        key="call_id_input",
+        label_visibility="collapsed"
+    )
+    
+    # Center the button
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        translate_button = st.button(
+            "Generate Translation",
+            type="primary",
+            use_container_width=True,
+            key="translate_btn"
+        )
+    
+    # Process translation
+    if translate_button:
+        if not call_id_input or not call_id_input.strip():
+            st.error("Please enter a Call ID")
+            return
+        
+        call_id = call_id_input.strip()
+        
+        # Fetch call from dataset
+        with st.spinner(f"Fetching call {call_id}..."):
+            call_row = fetch_call_by_id(df, call_id)
+        
+        if call_row is None:
+            st.error(f"No call found with ID: {call_id}")
+            st.info("Tip: Make sure you're entering a valid click_to_call_id from the dataset")
+            return
+        
+        # Get audio URL
+        audio_url = str(call_row.get('call_recording_url', ''))
+        
+        if not audio_url or audio_url == 'nan':
+            st.error("No audio recording URL found for this call")
+            return
+        
+        # Check cache first
+        cached_transcript = load_cached_transcript(
+            str(call_row.get('glid', '')), 
+            call_id
+        )
+        
+        if cached_transcript:
+            st.success("Using cached translation")
+            transcript_data = cached_transcript
+        else:
+            # Call Sarvam API
+            with st.spinner("Translating audio... This may take up to few seconds"):
+                transcript_data = transcribe_call(audio_url)
+            
+            # Save to cache if successful
+            if transcript_data.get('status') == 'success':
+                save_transcript_locally(
+                    str(call_row.get('glid', '')),
+                    str(call_row.get('call_entered_on', '')),
+                    call_id,
+                    transcript_data
+                )
+        
+        # Display results in an expander (popup-like)
+        st.markdown("---")
+        
+        if transcript_data.get('status') == 'success':
+            # Success case
+            st.success("Translation Complete!")
+            
+            # Call metadata
+            st.markdown("### Call Details")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Call ID", call_id)
+            with col2:
+                st.metric("Duration", f"{call_row.get('call_duration', 0)}s")
+            with col3:
+                st.metric("Direction", call_row.get('FLAG_IN_OUT', 'N/A'))
+            with col4:
+                st.metric("City", call_row.get('city_name', 'N/A'))
+            
+            # Audio player
+            st.markdown("### Audio Recording")
+            st.audio(audio_url)
+            
+            # Language detected
+            language_code = transcript_data.get('language_code', 'Unknown')
+            st.info(f"**Detected Language:** {language_code}")
+            
+            # Speaker-wise transcription in expandable box
+            speakers = transcript_data.get('speakers', [])
+            
+            if speakers:
+                # Calculate total text length for dynamic sizing
+                total_text_length = sum(len(speaker.get('text', '')) for speaker in speakers)
+                
+                # Determine font size based on text length
+                if total_text_length < 500:
+                    font_size = '1rem'
+                elif total_text_length < 1500:
+                    font_size = '0.95rem'
+                elif total_text_length < 3000:
+                    font_size = '0.9rem'
+                else:
+                    font_size = '0.85rem'
+                
+                # Build consolidated transcript text
+                transcript_lines = []
+                for speaker in speakers:
+                    speaker_id = speaker.get('speaker_id', 'Unknown')
+                    text = speaker.get('text', '')
+                    transcript_lines.append(f"<strong>{speaker_id}:</strong> {text}")
+                
+                consolidated_text = "<br><br>".join(transcript_lines)
+                
+                with st.expander("Show Transcripted Text", expanded=False):
+                    st.markdown(f"""
+                        <div style='background: linear-gradient(135deg, #6b46c1 0%, #553c9a 100%); 
+                                    color: white; 
+                                    padding: 20px; 
+                                    border-radius: 12px; 
+                                    max-height: 600px;
+                                    overflow-y: auto;
+                                    font-size: {font_size};
+                                    line-height: 1.8;
+                                    box-shadow: 0 4px 12px rgba(107, 70, 193, 0.3);'>
+                            {consolidated_text}
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No speaker data available in transcription")
+            
+            # Raw JSON expander
+            with st.expander("View Raw JSON Response"):
+                st.json(transcript_data)
+        else:
+            # Error case
+            error_msg = transcript_data.get('message', 'Unknown error')
+            st.error(f"**Translation Failed:** {error_msg}")
+            
+            if transcript_data.get('error_details'):
+                with st.expander("Error Details"):
+                    st.code(transcript_data['error_details'])

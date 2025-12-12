@@ -1,6 +1,6 @@
 """
-IndiaMART Insights Engine - Interactive Dashboard
-Streamlit-based visualization for call analytics
+IndiaMART Echo - Voice Call Translation Interface
+Streamlit-based UI for translating call recordings using Sarvam AI
 
 Run with: streamlit run app.py
 """
@@ -13,56 +13,267 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from collections import Counter
 
 # Import transcription UI module
-from src.ui.transcription_section import render_transcription_ui
+from src.ui.transcription_section import render_call_translation_ui
 
 # =============================================================================
 # PAGE CONFIGURATION
 # =============================================================================
 
 st.set_page_config(
-    page_title="IndiaMART Insights Engine",
-    page_icon="📞",
+    page_title="IndiaMART Echo",
+    page_icon="🎙️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Custom CSS
+# Custom CSS - Creamish and Purple Theme
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+    /* Hide default Streamlit elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Main container styling */
+    .main {
+        background: linear-gradient(135deg, #faf8f3 0%, #f5f1e8 100%);
+    }
+    
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 1200px;
+    }
+    
+    /* Header styling */
+    .echo-header {
+        background: linear-gradient(135deg, #6b46c1 0%, #553c9a 100%);
+        padding: 4rem 2rem;
         text-align: center;
-        padding: 1rem 0;
+        border-radius: 20px;
+        box-shadow: 0 15px 40px rgba(107, 70, 193, 0.25);
+        margin-bottom: 3rem;
     }
-    .metric-card {
-        background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
-        border-radius: 10px;
+    
+    .echo-title {
+        font-size: 3.5rem;
+        font-weight: 800;
+        color: white;
+        margin: 0;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        letter-spacing: -1px;
+    }
+    
+    .echo-subtitle {
+        font-size: 1.2rem;
+        color: rgba(255, 255, 255, 0.95);
+        margin: 1.5rem 0 0 0;
+        font-weight: 400;
+        line-height: 1.6;
+    }
+    
+    /* Input section - No white container */
+    .input-section {
+        max-width: 700px;
+        margin: 0 auto 3rem auto;
+    }
+    
+    .input-label {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: #6b46c1;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Streamlit input field customization */
+    .stTextInput > div > div > input {
+        border: 3px solid #6b46c1;
+        border-radius: 15px;
+        padding: 1.2rem 1.5rem;
+        font-size: 1.15rem;
+        transition: all 0.3s ease;
+        text-align: center;
+        background: white;
+        color: #2d3748;
+        font-weight: 500;
+    }
+    
+    .stTextInput > div > div > input:focus {
+        border-color: #553c9a;
+        box-shadow: 0 0 0 4px rgba(107, 70, 193, 0.15);
+        outline: none;
+    }
+    
+    .stTextInput > div > div > input::placeholder {
+        color: #a0aec0;
+    }
+    
+    /* Button styling */
+    .stButton > button {
+        background: linear-gradient(135deg, #6b46c1 0%, #553c9a 100%);
+        color: white;
+        border: none;
+        border-radius: 15px;
+        padding: 1rem 3rem;
+        font-size: 1.2rem;
+        font-weight: 700;
+        transition: all 0.3s ease;
+        box-shadow: 0 8px 20px rgba(107, 70, 193, 0.35);
+        width: 100%;
+        margin-top: 1rem;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 28px rgba(107, 70, 193, 0.5);
+        background: linear-gradient(135deg, #553c9a 0%, #6b46c1 100%);
+    }
+    
+    .stButton > button:active {
+        transform: translateY(-1px);
+    }
+    
+    /* Info section */
+    .info-section {
+        max-width: 900px;
+        margin: 3rem auto;
+        padding: 2rem;
+        background: rgba(255, 255, 255, 0.6);
+        border-radius: 15px;
+        border: 2px solid rgba(107, 70, 193, 0.2);
+    }
+    
+    .info-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #6b46c1;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+    
+    .info-text {
+        font-size: 1rem;
+        color: #4a5568;
+        line-height: 1.8;
+        text-align: center;
+    }
+    
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+    }
+    
+    .feature-card {
+        background: white;
         padding: 1.5rem;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        border: 2px solid rgba(107, 70, 193, 0.15);
+        transition: all 0.3s ease;
     }
-    .insight-box {
-        background: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 0 8px 8px 0;
+    
+    .feature-card:hover {
+        border-color: #6b46c1;
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(107, 70, 193, 0.2);
     }
-    .recommendation-box {
-        background: #d4edda;
-        border-left: 4px solid #28a745;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border-radius: 0 8px 8px 0;
+    
+    .feature-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #6b46c1;
+        margin-bottom: 0.5rem;
+    }
+    
+    .feature-desc {
+        font-size: 0.95rem;
+        color: #718096;
+        line-height: 1.6;
+    }
+    
+    /* Footer styling */
+    .echo-footer {
+        text-align: center;
+        padding: 2.5rem 2rem;
+        margin-top: 4rem;
+        color: #6b46c1;
+        font-weight: 600;
+        border-top: 3px solid rgba(107, 70, 193, 0.2);
+        background: rgba(255, 255, 255, 0.4);
+        border-radius: 15px;
+    }
+    
+    /* Results section */
+    .stSuccess {
+        background: rgba(107, 70, 193, 0.1);
+        border-left: 4px solid #6b46c1;
+        border-radius: 10px;
+        color: #2d3748;
+    }
+    
+    .stError {
+        border-radius: 10px;
+    }
+    
+    .stInfo {
+        background: rgba(107, 70, 193, 0.08);
+        border-left: 4px solid #6b46c1;
+        border-radius: 10px;
+        color: #2d3748;
+    }
+    
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        color: #6b46c1;
+        font-weight: 700;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        color: #4a5568;
+        font-weight: 600;
+    }
+    
+    /* Audio player */
+    audio {
+        width: 100%;
+        border-radius: 12px;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: rgba(107, 70, 193, 0.1);
+        border-radius: 12px;
+        font-weight: 600;
+        color: #6b46c1;
+        border: 2px solid rgba(107, 70, 193, 0.2);
+    }
+    
+    .streamlit-expanderHeader:hover {
+        background: rgba(107, 70, 193, 0.15);
+        border-color: #6b46c1;
+    }
+    
+    /* Spinner */
+    .stSpinner > div {
+        border-top-color: #6b46c1 !important;
+    }
+    
+    /* Markdown headers in results */
+    h3 {
+        color: #6b46c1;
+        font-weight: 700;
+    }
+    
+    /* API Status */
+    .api-status {
+        text-align: center;
+        margin: 1.5rem 0;
+        font-size: 1rem;
+        font-weight: 600;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -75,7 +286,7 @@ st.markdown("""
 @st.cache_data
 def load_raw_data():
     """Load the raw Excel data"""
-    paths = ["Data Voice Hackathon_Master.xlsx", "data/Data Voice Hackathon_Master.xlsx"]
+    paths = ["Data Voice Hackathon_Master-1.xlsx", "data/Data Voice Hackathon_Master-1.xlsx"]
     for path in paths:
         if os.path.exists(path):
             try:
@@ -85,304 +296,71 @@ def load_raw_data():
     return None
 
 
-@st.cache_data
-def extract_quick_insights(df):
-    """Extract insights from existing summary column"""
-    insights = {
-        'sentiment': Counter(),
-        'key_topics': Counter(),
-        'alerts': 0
-    }
-    
-    for _, row in df.iterrows():
-        summary = str(row.get('summary', ''))
-        
-        if '@@@Sentiment:' in summary:
-            try:
-                sentiment_part = summary.split('@@@Sentiment:')[1].split('@@@')[0]
-                if 'Positive' in sentiment_part:
-                    insights['sentiment']['Positive'] += 1
-                elif 'Negative' in sentiment_part:
-                    insights['sentiment']['Negative'] += 1
-                else:
-                    insights['sentiment']['Neutral'] += 1
-            except:
-                pass
-        
-        if '@@@Key Topics:' in summary:
-            try:
-                topics_part = summary.split('@@@Key Topics:')[1].split('\n')[1]
-                topics = [t.strip().lower() for t in topics_part.split(',')]
-                for topic in topics:
-                    if topic and len(topic) > 2:
-                        insights['key_topics'][topic] += 1
-            except:
-                pass
-        
-        if 'Alert (If Any):' in summary:
-            alert_part = summary.split('Alert (If Any):')[1].split('@@@')[0]
-            if 'None' not in alert_part and alert_part.strip():
-                insights['alerts'] += 1
-    
-    return insights
-
-
 # =============================================================================
-# VISUALIZATION FUNCTIONS
-# =============================================================================
-
-def plot_customer_type_distribution(df):
-    counts = df['customer_type'].value_counts().head(10)
-    fig = px.bar(
-        x=counts.values,
-        y=counts.index,
-        orientation='h',
-        title="Customer Type Distribution",
-        labels={'x': 'Number of Calls', 'y': 'Customer Type'},
-        color=counts.values,
-        color_continuous_scale='Blues'
-    )
-    fig.update_layout(showlegend=False, height=400)
-    return fig
-
-
-def plot_city_distribution(df):
-    counts = df['city_name'].value_counts().head(15)
-    fig = px.bar(
-        x=counts.index,
-        y=counts.values,
-        title="Top 15 Cities by Call Volume",
-        labels={'x': 'City', 'y': 'Number of Calls'},
-        color=counts.values,
-        color_continuous_scale='Viridis'
-    )
-    fig.update_layout(xaxis_tickangle=-45, height=400)
-    return fig
-
-
-def plot_sentiment_pie(insights):
-    if not insights['sentiment']:
-        return None
-    fig = px.pie(
-        values=list(insights['sentiment'].values()),
-        names=list(insights['sentiment'].keys()),
-        title="Sentiment Distribution",
-        color_discrete_sequence=['#28a745', '#ffc107', '#dc3545']
-    )
-    fig.update_traces(textposition='inside', textinfo='percent+label')
-    return fig
-
-
-def plot_key_topics_wordcloud(insights):
-    if not insights['key_topics']:
-        return None
-    top_topics = dict(insights['key_topics'].most_common(15))
-    fig = px.bar(
-        x=list(top_topics.values()),
-        y=list(top_topics.keys()),
-        orientation='h',
-        title="Top 15 Key Topics from Calls",
-        labels={'x': 'Frequency', 'y': 'Topic'},
-        color=list(top_topics.values()),
-        color_continuous_scale='Oranges'
-    )
-    fig.update_layout(showlegend=False, height=500)
-    return fig
-
-
-def plot_repeat_ticket_analysis(df):
-    repeat_by_type = pd.crosstab(df['customer_type'], df['is_ticket_repeat60d'], normalize='index') * 100
-    if 'Yes' in repeat_by_type.columns:
-        repeat_by_type = repeat_by_type.sort_values('Yes', ascending=True)
-        fig = px.bar(
-            x=repeat_by_type['Yes'].values,
-            y=repeat_by_type.index,
-            orientation='h',
-            title="Repeat Ticket Rate by Customer Type (%)",
-            labels={'x': 'Repeat Rate %', 'y': 'Customer Type'},
-            color=repeat_by_type['Yes'].values,
-            color_continuous_scale='Reds'
-        )
-        fig.update_layout(showlegend=False, height=500)
-        return fig
-    return None
-
-
-def plot_call_duration_distribution(df):
-    fig = px.histogram(
-        df,
-        x='call_duration',
-        nbins=50,
-        title="Call Duration Distribution (seconds)",
-        labels={'call_duration': 'Duration (seconds)', 'count': 'Number of Calls'},
-        color_discrete_sequence=['#2d5a87']
-    )
-    fig.update_layout(height=400)
-    return fig
-
-
-# =============================================================================
-# MAIN DASHBOARD
+# MAIN INTERFACE
 # =============================================================================
 
 def main():
-    st.markdown('<h1 class="main-header">📞 IndiaMART Insights Engine</h1>', unsafe_allow_html=True)
-    st.markdown('<p style="text-align: center; color: #666;">Voice Call Analytics Dashboard | Powered by NVIDIA NIM (Nemotron-4-Mini-Hindi)</p>', unsafe_allow_html=True)
+    # Header Section
+    st.markdown("""
+        <div class="echo-header">
+            <h1 class="echo-title">IndiaMART Echo</h1>
+            <p class="echo-subtitle">
+                Linking the Promise to the Reality across IM - Seller Calls
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
     
+    # Load data
     df = load_raw_data()
     
     if df is None:
-        st.error("Failed to load data. Please ensure 'Data Voice Hackathon_Master.xlsx' is in the current directory.")
+        st.error("Failed to load dataset. Please ensure 'Data Voice Hackathon_Master-1.xlsx' is in the current directory.")
         return
     
-    # Sidebar filters
-    st.sidebar.header("🔧 Filters")
+    # Info Section
+    st.markdown("""
+        <div class="info-section">
+            <div class="info-title">AI-Powered Call Translation & Analysis</div>
+            <div class="info-text">
+                Transform your voice call recordings into actionable insights. Our system uses advanced AI 
+                to transcribe, translate, and analyze seller support calls, helping you understand customer 
+                interactions and improve service quality.
+            </div>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-title">Instant Translation</div>
+                    <div class="feature-desc">Automatically transcribe and translate calls in multiple languages with high accuracy</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">Speaker Detection</div>
+                    <div class="feature-desc">Identify and separate different speakers for clear conversation flow</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">Smart Caching</div>
+                    <div class="feature-desc">Previously translated calls load instantly from local cache</div>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
     
-    customer_types = ['All'] + list(df['customer_type'].unique())
-    selected_type = st.sidebar.selectbox("Customer Type", customer_types)
+    # Input Section
+    st.markdown('<div class="input-section">', unsafe_allow_html=True)
+    st.markdown('<div class="input-label">Enter Call ID to Begin Translation</div>', unsafe_allow_html=True)
     
-    top_cities = ['All'] + list(df['city_name'].value_counts().head(20).index)
-    selected_city = st.sidebar.selectbox("City", top_cities)
+    # Render the translation UI
+    render_call_translation_ui(df)
     
-    repeat_filter = st.sidebar.radio("Repeat Ticket", ['All', 'Yes', 'No'])
-    direction_filter = st.sidebar.radio("Call Direction", ['All', 'Incoming', 'Outgoing'])
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    # Apply filters
-    filtered_df = df.copy()
-    if selected_type != 'All':
-        filtered_df = filtered_df[filtered_df['customer_type'] == selected_type]
-    if selected_city != 'All':
-        filtered_df = filtered_df[filtered_df['city_name'] == selected_city]
-    if repeat_filter != 'All':
-        filtered_df = filtered_df[filtered_df['is_ticket_repeat60d'] == repeat_filter]
-    if direction_filter != 'All':
-        filtered_df = filtered_df[filtered_df['FLAG_IN_OUT'] == direction_filter]
-    
-    insights = extract_quick_insights(filtered_df)
-    
-    # KEY METRICS
-    st.header("📊 Key Metrics")
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    with col1:
-        st.metric("Total Calls", f"{len(filtered_df):,}")
-    with col2:
-        st.metric("Unique Customers", f"{filtered_df['glid'].nunique():,}")
-    with col3:
-        repeat_rate = len(filtered_df[filtered_df['is_ticket_repeat60d'] == 'Yes']) / len(filtered_df) * 100
-        st.metric("Repeat Ticket Rate", f"{repeat_rate:.1f}%")
-    with col4:
-        st.metric("Avg Call Duration", f"{filtered_df['call_duration'].mean():.0f}s")
-    with col5:
-        st.metric("Alert Calls", f"{insights['alerts']:,}")
-    
-    # VISUALIZATIONS
-    st.header("📈 Analytics")
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 Overview", 
-        "🗺️ Geographic", 
-        "👥 Customer Segments", 
-        "💬 Call Analysis",
-        "🔊 Call Transcription"
-    ])
-    
-    with tab1:
-        col1, col2 = st.columns(2)
-        with col1:
-            fig = plot_sentiment_pie(insights)
-            if fig:
-                st.plotly_chart(fig, use_container_width=True)
-        with col2:
-            fig = plot_key_topics_wordcloud(insights)
-            if fig:
-                st.plotly_chart(fig, use_container_width=True)
-    
-    with tab2:
-        st.plotly_chart(plot_city_distribution(filtered_df), use_container_width=True)
-        
-        st.subheader("City-wise Breakdown")
-        city_stats = filtered_df.groupby('city_name').agg({
-            'click_to_call_id': 'count',
-            'call_duration': 'mean',
-            'is_ticket_repeat60d': lambda x: (x == 'Yes').sum()
-        }).round(2)
-        city_stats.columns = ['Total Calls', 'Avg Duration', 'Repeat Tickets']
-        city_stats = city_stats.sort_values('Total Calls', ascending=False).head(15)
-        st.dataframe(city_stats, use_container_width=True)
-    
-    with tab3:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.plotly_chart(plot_customer_type_distribution(filtered_df), use_container_width=True)
-        with col2:
-            fig = plot_repeat_ticket_analysis(filtered_df)
-            if fig:
-                st.plotly_chart(fig, use_container_width=True)
-    
-    with tab4:
-        st.plotly_chart(plot_call_duration_distribution(filtered_df), use_container_width=True)
-    
-    with tab5:
-        # Transcription section - use full dataset (not filtered)
-        render_transcription_ui(df)
-    
-    # ACTIONABLE INSIGHTS
-    st.header("💡 Actionable Insights")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
-        st.markdown("### 🎯 Top Recommendation")
-        st.markdown(f"""
-        **Reduce Repeat Ticket Rate**
-        
-        Current repeat rate is **{repeat_rate:.1f}%**. Focus on:
-        - First-call resolution training
-        - Post-call verification
-        - Issue categorization improvement
-        
-        **Potential Impact:** Reducing by 10% could save ~{int(len(filtered_df) * 0.1 * 0.37):,} follow-up calls
-        """)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown('<div class="insight-box">', unsafe_allow_html=True)
-        st.markdown("### 📌 Key Observations")
-        top_topics = list(insights['key_topics'].most_common(5))
-        st.markdown("**Top Issues Mentioned:**")
-        for topic, count in top_topics:
-            st.markdown(f"- {topic}: {count} mentions")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # SAMPLE TRANSCRIPTS VIEWER
-    st.header("📝 Sample Call Viewer")
-    sample_idx = st.slider("Select Call", 0, min(100, len(filtered_df)-1), 0)
-    
-    if len(filtered_df) > sample_idx:
-        sample_row = filtered_df.iloc[sample_idx]
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            st.markdown("**Call Details:**")
-            st.write(f"📍 City: {sample_row['city_name']}")
-            st.write(f"👤 Customer Type: {sample_row['customer_type']}")
-            st.write(f"📞 Direction: {sample_row['FLAG_IN_OUT']}")
-            st.write(f"⏱️ Duration: {sample_row['call_duration']}s")
-            st.write(f"🔄 Repeat: {sample_row['is_ticket_repeat60d']}")
-        
-        with col2:
-            st.markdown("**Call Summary:**")
-            summary = sample_row['summary'][:1000] if pd.notna(sample_row['summary']) else "No summary"
-            st.text_area("", value=summary, height=200, disabled=True)
-        
-        with st.expander("View Full Transcript"):
-            transcript = sample_row['transcript'] if pd.notna(sample_row['transcript']) else "No transcript"
-            st.text_area("", value=transcript, height=400, disabled=True)
-    
-    st.markdown("---")
-    st.markdown('<p style="text-align: center; color: #888;">IndiaMART Insights Engine | Data Voice Hackathon 2024</p>', unsafe_allow_html=True)
+    # Footer Section
+    st.markdown("""
+        <div class="echo-footer">
+            IndiaMART Voice AI Hackathon 2024<br>
+            Powered by Sarvam AI Translation API
+        </div>
+    """, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
     main()
-

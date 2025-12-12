@@ -8,7 +8,6 @@ Usage:
     python main.py --mode quick-insights              # Quick insights from existing summaries
     python main.py --mode demo                        # Run 5 use case demo
 """
-
 import os
 import sys
 import argparse
@@ -54,8 +53,7 @@ def validate_api_key() -> str:
     print(f"   Model: nvidia/nemotron-4-mini-hindi-4b-instruct")
     return api_key
 
-
-def load_data(filepath: str = "Data Voice Hackathon_Master.xlsx") -> pd.DataFrame:
+def load_data(filepath: str = "Data Voice Hackathon_Master-1.xlsx") -> pd.DataFrame:
     """Load and validate the dataset"""
     print(f"\n📂 Loading data from {filepath}...")
     
@@ -74,7 +72,6 @@ def load_data(filepath: str = "Data Voice Hackathon_Master.xlsx") -> pd.DataFram
     
     print(f"❌ ERROR: File not found. Tried: {paths_to_try}")
     sys.exit(1)
-
 
 def run_sample_classification(df: pd.DataFrame, api_key: str, sample_size: int = 10):
     """Run classification on a sample for testing - outputs merged CSV with all columns"""
@@ -117,18 +114,18 @@ def run_sample_classification(df: pd.DataFrame, api_key: str, sample_size: int =
         print(f"Call Duration: {row.get('call_duration', 'N/A')}s")
         print(f"\n🏷️  Primary Category: {row.get('ai_primary_category', 'N/A')}")
         print(f"📝 Issue Summary: {row.get('ai_issue_summary', 'N/A')}")
-        print(f"😟 Pain Points: {row.get('ai_customer_pain_points', 'N/A')}")
-        print(f"😊 Sentiment: {row.get('ai_sentiment', 'N/A')}")
-        print(f"📈 Sentiment Shift: {row.get('ai_sentiment_shift', 'N/A')}")
-        print(f"⚠️  Churn Risk: {row.get('ai_churn_risk', 'N/A')}")
-        print(f"🚨 Urgency: {row.get('ai_urgency', 'N/A')}")
-        print(f"✅ Resolution: {row.get('ai_resolution_status', 'N/A')}")
-        print(f"\n👨‍💼 Executive Performance:")
+        print(f" Pain Points: {row.get('ai_customer_pain_points', 'N/A')}")
+        print(f" Sentiment: {row.get('ai_sentiment', 'N/A')}")
+        print(f" Sentiment Shift: {row.get('ai_sentiment_shift', 'N/A')}")
+        print(f" Churn Risk: {row.get('ai_churn_risk', 'N/A')}")
+        print(f" Urgency: {row.get('ai_urgency', 'N/A')}")
+        print(f" Resolution: {row.get('ai_resolution_status', 'N/A')}")
+        print(f"\n Executive Performance:")
         print(f"   Empathy: {row.get('ai_exec_empathy_shown', 'N/A')}")
         print(f"   Solution Offered: {row.get('ai_exec_solution_offered', 'N/A')}")
         print(f"   Followed Process: {row.get('ai_exec_followed_process', 'N/A')}")
-        print(f"\n💡 Actionable Insight: {row.get('ai_actionable_insight', 'N/A')}")
-        print(f"🔄 Follow-up Required: {row.get('ai_requires_follow_up', 'N/A')}")
+        print(f"\n Actionable Insight: {row.get('ai_actionable_insight', 'N/A')}")
+        print(f" Follow-up Required: {row.get('ai_requires_follow_up', 'N/A')}")
         if row.get('ai_requires_follow_up'):
             print(f"   Reason: {row.get('ai_follow_up_reason', 'N/A')}")
     
@@ -138,22 +135,22 @@ def run_sample_classification(df: pd.DataFrame, api_key: str, sample_size: int =
     print("=" * 70)
     
     if 'ai_primary_category' in merged_df.columns:
-        print("\n📊 Category Distribution:")
+        print("\n Category Distribution:")
         for cat, count in merged_df['ai_primary_category'].value_counts().items():
             print(f"   • {cat}: {count} ({count/len(merged_df)*100:.1f}%)")
     
     if 'ai_churn_risk' in merged_df.columns:
-        print("\n⚠️ Churn Risk Distribution:")
+        print("\n Churn Risk Distribution:")
         for risk, count in merged_df['ai_churn_risk'].value_counts().items():
             print(f"   • {risk}: {count}")
     
     if 'ai_sentiment' in merged_df.columns:
-        print("\n😊 Sentiment Distribution:")
+        print("\n Sentiment Distribution:")
         for sent, count in merged_df['ai_sentiment'].value_counts().items():
             print(f"   • {sent}: {count}")
     
     if 'ai_resolution_status' in merged_df.columns:
-        print("\n✅ Resolution Status:")
+        print("\n Resolution Status:")
         for status, count in merged_df['ai_resolution_status'].value_counts().items():
             print(f"   • {status}: {count}")
     
@@ -165,10 +162,10 @@ def run_full_classification(df: pd.DataFrame, api_key: str):
     from src.classifiers import NvidiaClassifier, BatchProcessor
     from src.classifiers.nvidia_classifier import flatten_classification_results
     
-    print(f"\n🚀 Starting FULL classification of {len(df):,} records...")
-    print("🤖 Using NVIDIA NIM: Nemotron-4-Mini-Hindi (optimized for Hinglish)")
-    print("⏱️  Estimated time: ~2-3 hours (with rate limiting)")
-    print("💾 Checkpoints will be saved every batch")
+    print(f"\n Starting FULL classification of {len(df):,} records...")
+    print(" Using NVIDIA NIM: Nemotron-4-Mini-Hindi (optimized for Hinglish)")
+    print(" Estimated time: ~2-3 hours (with rate limiting)")
+    print(" Checkpoints will be saved every batch")
     
     classifier = NvidiaClassifier(api_key=api_key)
     processor = BatchProcessor(classifier, checkpoint_dir=CHECKPOINT_DIR)
@@ -198,7 +195,7 @@ def run_full_classification(df: pd.DataFrame, api_key: str):
     output_file = f"{OUTPUT_DIR}/classified_calls_full_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     merged_df.to_csv(output_file, index=False, encoding='utf-8-sig')
     
-    print(f"\n✅ Full results saved to {output_file}")
+    print(f"\n Full results saved to {output_file}")
     print(f"   Total rows: {len(merged_df):,}")
     print(f"   Total columns: {len(merged_df.columns)} (Original: {len(df.columns)} + AI Metrics)")
     
@@ -224,18 +221,18 @@ def run_quick_insights(df: pd.DataFrame):
     print("QUICK INSIGHTS FROM EXISTING CALL SUMMARIES")
     print("=" * 70)
     
-    print(f"\n📊 Total Calls Analyzed: {insights['total_calls']:,}")
+    print(f"\n Total Calls Analyzed: {insights['total_calls']:,}")
     
-    print(f"\n😊 Sentiment Distribution:")
+    print(f"\n Sentiment Distribution:")
     total = sum(insights['sentiment_distribution'].values())
     for sentiment, count in sorted(insights['sentiment_distribution'].items(), key=lambda x: -x[1]):
         pct = count / total * 100 if total > 0 else 0
         bar = "█" * int(pct / 2)
         print(f"  {sentiment:15} {bar} {count:,} ({pct:.1f}%)")
     
-    print(f"\n🚨 Alert Calls: {insights['alert_calls']} ({insights['alert_calls']/insights['total_calls']*100:.2f}%)")
+    print(f"\nAlert Calls: {insights['alert_calls']} ({insights['alert_calls']/insights['total_calls']*100:.2f}%)")
     
-    print(f"\n🏷️  Top 20 Key Topics from Calls:")
+    print(f"\nTop 20 Key Topics from Calls:")
     for i, (topic, count) in enumerate(list(insights['key_topics'].items())[:20], 1):
         print(f"  {i:2}. {topic}: {count}")
     
@@ -284,7 +281,7 @@ Examples:
     )
     parser.add_argument(
         "--input", 
-        default="Data Voice Hackathon_Master.xlsx",
+        default="Data Voice Hackathon_Master-1.xlsx",
         help="Input data file"
     )
     

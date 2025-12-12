@@ -7,7 +7,7 @@ import pandas as pd
 from typing import Optional
 
 
-def load_data(filepath: str = "data/Data Voice Hackathon_Master.xlsx") -> Optional[pd.DataFrame]:
+def load_data(filepath: str = "data/Data Voice Hackathon_Master-1.xlsx") -> Optional[pd.DataFrame]:
     """
     Load the raw Excel data
     
@@ -20,9 +20,9 @@ def load_data(filepath: str = "data/Data Voice Hackathon_Master.xlsx") -> Option
     # Try multiple paths
     paths_to_try = [
         filepath,
-        "Data Voice Hackathon_Master.xlsx",
-        "data/Data Voice Hackathon_Master.xlsx",
-        "../Data Voice Hackathon_Master.xlsx"
+        "Data Voice Hackathon_Master-1.xlsx",
+        "data/Data Voice Hackathon_Master-1.xlsx",
+        "../Data Voice Hackathon_Master-1.xlsx"
     ]
     
     for path in paths_to_try:
