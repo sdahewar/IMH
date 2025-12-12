@@ -29,12 +29,12 @@ def load_data(filepath: str = "data/Data Voice Hackathon_Master.xlsx") -> Option
         if os.path.exists(path):
             try:
                 df = pd.read_excel(path)
-                print(f"✅ Loaded {len(df):,} records from {path}")
+                print(f"Loaded {len(df):,} records from {path}")
                 return df
             except Exception as e:
-                print(f"❌ Error loading {path}: {e}")
+                print(f"Error loading {path}: {e}")
     
-    print(f"❌ Could not find data file. Tried: {paths_to_try}")
+    print(f"Could not find data file. Tried: {paths_to_try}")
     return None
 
 
@@ -51,10 +51,10 @@ def load_classified_data(filepath: str = "output/classified_calls.csv") -> Optio
     if os.path.exists(filepath):
         try:
             df = pd.read_csv(filepath)
-            print(f"✅ Loaded {len(df):,} classified records from {filepath}")
+            print(f"Loaded {len(df):,} classified records from {filepath}")
             return df
         except Exception as e:
-            print(f"❌ Error loading classified data: {e}")
+            print(f"Error loading classified data: {e}")
     
     return None
 
@@ -73,7 +73,7 @@ def validate_data(df: pd.DataFrame) -> bool:
     missing = [col for col in required_cols if col not in df.columns]
     
     if missing:
-        print(f"⚠️ Warning: Missing columns: {missing}")
+        print(f"Warning: Missing columns: {missing}")
         return False
     
     return True

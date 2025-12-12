@@ -18,6 +18,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from collections import Counter
 
+# Import transcription UI module
+from src.ui.transcription_section import render_transcription_ui
+
 # =============================================================================
 # PAGE CONFIGURATION
 # =============================================================================
@@ -275,7 +278,13 @@ def main():
     
     # VISUALIZATIONS
     st.header("📈 Analytics")
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🗺️ Geographic", "👥 Customer Segments", "💬 Call Analysis"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 Overview", 
+        "🗺️ Geographic", 
+        "👥 Customer Segments", 
+        "💬 Call Analysis",
+        "🔊 Call Transcription"
+    ])
     
     with tab1:
         col1, col2 = st.columns(2)
@@ -312,6 +321,10 @@ def main():
     
     with tab4:
         st.plotly_chart(plot_call_duration_distribution(filtered_df), use_container_width=True)
+    
+    with tab5:
+        # Transcription section - use full dataset (not filtered)
+        render_transcription_ui(df)
     
     # ACTIONABLE INSIGHTS
     st.header("💡 Actionable Insights")

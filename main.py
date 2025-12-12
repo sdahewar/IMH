@@ -44,7 +44,7 @@ def validate_api_key() -> str:
     api_key = os.getenv("NVIDIA_API_KEY") or NVIDIA_API_KEY
     
     if not api_key:
-        print("❌ ERROR: NVIDIA API key not found!")
+        print("ERROR: NVIDIA API key not found!")
         print("\nTo set your API key:")
         print("  1. Update src/config.py with your key")
         print("  2. Or set environment variable: $env:NVIDIA_API_KEY='your_key'")
