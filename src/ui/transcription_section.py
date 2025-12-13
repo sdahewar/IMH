@@ -351,10 +351,6 @@ def render_call_result(call_idx: int, call_row: pd.Series, transcript_data: Dict
             else:
                 st.info("No speaker data available in transcription")
             
-            # Raw JSON expander
-            with st.expander("📄 View Raw JSON"):
-                st.json(transcript_data)
-                
         else:
             # Error case
             error_msg = transcript_data.get('message', 'Unknown error')
@@ -825,10 +821,6 @@ def render_call_translation_ui(df: pd.DataFrame):
                     """, unsafe_allow_html=True)
             else:
                 st.info("No speaker data available in transcription")
-            
-            # Raw JSON expander
-            with st.expander("View Raw JSON Response"):
-                st.json(transcript_data)
             
             # Insights Generation Section
             st.markdown("---")
