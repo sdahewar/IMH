@@ -28,7 +28,7 @@ def demo_use_case(idx: int, row: pd.Series, result: dict):
     print_header(f"USE CASE {idx}: {result.get('primary_category', 'UNKNOWN')}", "▓")
     
     # Call Metadata
-    print("📋 CALL METADATA")
+    print(" CALL METADATA")
     print(f"   • Customer Type: {row['customer_type']}")
     print(f"   • City: {row['city_name']}")
     print(f"   • Call Direction: {row['FLAG_IN_OUT']}")
@@ -121,7 +121,7 @@ def run_demo():
     
     # Load data
     print("\n📂 Loading dataset...")
-    df = pd.read_excel("Data Voice Hackathon_Master.xlsx")
+    df = pd.read_excel("datasets/Data Voice Hackathon_Master-1.xlsx")
     print(f"   Loaded {len(df):,} call records")
     
     # Select 5 diverse use cases
