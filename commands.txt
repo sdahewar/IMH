@@ -1,0 +1,20 @@
+
+
+RUN THE SERVER
+
+streamlit run app.py
+
+
+STOP THR SERVER 
+
+pkill -f "streamlit run"
+
+
+SERVER RESTART
+
+pkill -f "streamlit run" && bash start_streamlit.sh
+
+
+SERVER LINK
+
+http://localhost:8501 

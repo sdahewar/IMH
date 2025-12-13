@@ -129,8 +129,8 @@ A. IDENTIFIED PROBLEM + ACTIONABLES
 
 2. For each identified problem:
    - Provide the exact actionable(s) from the reference list.
-   - Include "Action for IndiaMART" if applicable.
-   - Do NOT invent new actionables.
+   - Include "Action for IndiaMART" ONLY if it exists in the reference data. If not available, do not print .
+   - Do NOT invent new actionables or actions.
 
 B. SELLER TONE ANALYSIS + ACTIONABLES
 Analyze seller tone across:
@@ -268,6 +268,17 @@ Begin analysis now. Output ONLY the JSON, no additional text.
                 response_text = response_text[:-3]
             
             response_text = response_text.strip()
+            
+            # Try to extract JSON if there's extra text
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                response_text = json_match.group()
+            
+            # Sanitize common JSON issues
+            # Replace single quotes with double quotes (careful with apostrophes in text)
+            # Remove control characters that break JSON
+            response_text = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', response_text)
             
             # Parse JSON
             insights = json.loads(response_text)

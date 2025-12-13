@@ -48,6 +48,84 @@ def get_business_segment(glid: int) -> str:
     except Exception as e:
         return 'N/A'
 
+def generate_insights_report(insights: Dict, call_id: str, glid: str = None) -> str:
+    """
+    Generate a formatted text report from insights data
+    
+    Args:
+        insights: Dictionary containing all insights data
+        call_id: The call ID for reference
+        glid: GLID if available
+        
+    Returns:
+        Formatted text report string
+    """
+    report = []
+    report.append("=" * 60)
+    report.append("VYAPARECHO - INDIAMART VOICE INSIGHTS REPORT")
+    report.append("=" * 60)
+    report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    report.append(f"Call ID: {call_id}")
+    if glid:
+        report.append(f"GLID: {glid}")
+    report.append("")
+    
+    # Problems & Actionables
+    report.append("-" * 60)
+    report.append("IDENTIFIED PROBLEMS & ACTIONABLES")
+    report.append("-" * 60)
+    problems = insights.get('problems_identified', [])
+    if problems:
+        for i, problem in enumerate(problems, 1):
+            report.append(f"\n{i}. {problem.get('problem_name', 'Unknown')}")
+            report.append("   Actionables:")
+            for action in problem.get('actionables', []):
+                report.append(f"   - {action}")
+            action_im = problem.get('action_for_indiamart', '')
+            if action_im and str(action_im).strip() and 'no mapped' not in str(action_im).lower():
+                report.append(f"   Action for IndiaMART: {action_im}")
+    else:
+        report.append("No problems identified.")
+    report.append("")
+    
+    # Seller Tone Analysis
+    report.append("-" * 60)
+    report.append("SELLER TONE ANALYSIS")
+    report.append("-" * 60)
+    seller_tone = insights.get('seller_tone', {})
+    report.append(f"Sentiment: {seller_tone.get('sentiment', 'N/A')}")
+    report.append(f"Churn Risk: {seller_tone.get('churn_risk', 'N/A')}")
+    report.append(f"Issue Severity: {seller_tone.get('issue_severity', 'N/A')}")
+    report.append(f"Engagement Level: {seller_tone.get('engagement_level', 'N/A')}")
+    report.append(f"Outcome Prediction: {seller_tone.get('outcome_prediction', 'N/A')}")
+    if seller_tone.get('actionables_if_any'):
+        report.append("\nRecommended Actions:")
+        for action in seller_tone.get('actionables_if_any', []):
+            report.append(f"- {action}")
+    report.append("")
+    
+    # Executive Tone Analysis
+    report.append("-" * 60)
+    report.append("EXECUTIVE PERFORMANCE ANALYSIS")
+    report.append("-" * 60)
+    exec_tone = insights.get('executive_tone', {})
+    report.append(f"Empathy & Professionalism: {exec_tone.get('empathy_and_professionalism', 'N/A')}")
+    report.append(f"Clarity & Confidence: {exec_tone.get('clarity_and_confidence', 'N/A')}")
+    report.append(f"Persuasion Effectiveness: {exec_tone.get('persuasion_effectiveness', 'N/A')}")
+    report.append(f"Problem-Solving: {exec_tone.get('problem_solving_orientation', 'N/A')}")
+    report.append(f"Rapport-Building: {exec_tone.get('rapport_building_strength', 'N/A')}")
+    if exec_tone.get('actionables_if_any'):
+        report.append("\nImprovement Suggestions:")
+        for action in exec_tone.get('actionables_if_any', []):
+            report.append(f"- {action}")
+    
+    report.append("")
+    report.append("=" * 60)
+    report.append("End of Report")
+    report.append("=" * 60)
+    
+    return "\n".join(report)
+
 
 def fetch_calls_for_glid(df: pd.DataFrame, glid: str) -> pd.DataFrame:
     """
@@ -318,15 +396,25 @@ def render_call_result(call_idx: int, call_row: pd.Series, transcript_data: Dict
                                 problems = insights.get('problems_identified', [])
                                 if problems:
                                     for i, problem in enumerate(problems, 1):
-                                        st.markdown(f"**{i}. {problem.get('problem_name', 'Unknown')}**")
-                                        st.markdown(f"*Evidence:* {problem.get('evidence_from_transcript', 'N/A')}")
-                                        st.markdown("**Actionables:**")
-                                        for action in problem.get('actionables', []):
-                                            st.markdown(f"• {action}")
-                                        if problem.get('action_for_indiamart'):
-                                            st.markdown(f"**Action for IndiaMART:** {problem.get('action_for_indiamart')}")
-                                        if i < len(problems):
-                                            st.markdown("---")
+                                        # Problem card with styled HTML
+                                        problem_name = problem.get('problem_name', 'Unknown')
+                                        actionables = problem.get('actionables', [])
+                                        action_im = problem.get('action_for_indiamart', '')
+                                        
+                                        actionable_html = ''.join([f'<li style="margin: 8px 0; padding-left: 10px; border-left: 3px solid #7c3aed;">{action}</li>' for action in actionables])
+                                        
+                                        im_action_html = f'<div style="margin-top: 15px; padding: 12px; background: rgba(124, 58, 237, 0.15); border-radius: 8px; border-left: 4px solid #7c3aed;"><strong>🎯 Action for IndiaMART:</strong> {action_im}</div>' if action_im and action_im.strip() and 'no mapped' not in action_im.lower() else ''
+                                        
+                                        st.markdown(f'''
+                                        <div style="background: rgba(30, 30, 30, 0.6); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid rgba(124, 58, 237, 0.3);">
+                                            <h4 style="color: #a78bfa; margin: 0 0 15px 0; font-size: 1.2rem;">🔹 {i}. {problem_name}</h4>
+                                            <div style="color: #9ca3af; font-size: 0.95rem; margin-bottom: 10px;"><strong>Actionables:</strong></div>
+                                            <ul style="list-style: none; padding: 0; margin: 0; color: #e5e7eb;">
+                                                {actionable_html}
+                                            </ul>
+                                            {im_action_html}
+                                        </div>
+                                        ''', unsafe_allow_html=True)
                                 else:
                                     st.info("No mapped problems found in this call.")
                             
@@ -375,13 +463,21 @@ def render_call_result(call_idx: int, call_row: pd.Series, transcript_data: Dict
                                     st.markdown("**Improvement Suggestions:**")
                                     for action in exec_tone.get('actionables_if_any', []):
                                         st.markdown(f"• {action}")
-                            
-                            # Segment-Specific Insights
-                            with st.expander("📊 **Segment-Specific Insights**"):
-                                segment_notes = insights.get('segment_notes', {})
-                                st.markdown(f"**Segment:** {segment_notes.get('segment', 'N/A')}")
-                                st.markdown(f"**Business Segment:** {segment_notes.get('business_segment', 'N/A')}")
-                                st.markdown(f"**Relevance:** {segment_notes.get('relevance_to_segment', 'N/A')}")
+                                        
+                            # Download Report Button (OUTSIDE the expander)
+                            st.markdown("---")
+                            report_text = generate_insights_report(
+                                insights, 
+                                call_id, 
+                                str(call_row.get('glid', ''))
+                            )
+                            st.download_button(
+                                label="📥 Download Insights Report",
+                                data=report_text,
+                                file_name=f"insights_report_{call_id}.txt",
+                                mime="text/plain",
+                                help="Download a text file containing all insights"
+                            )
                         
                         else:
                             st.error(f"❌ Insights generation failed: {insights_result.get('message', 'Unknown error')}")
@@ -660,7 +756,7 @@ def render_call_translation_ui(df: pd.DataFrame):
             st.markdown("### Call Details")
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Call ID", call_row.get('click_to_call_id', 'N/A'))
+                st.metric("GLID", call_row.get('glid', 'N/A'))
             with col2:
                 st.metric("Duration", f"{call_row.get('call_duration', 0)}s")
             with col3:
@@ -787,15 +883,25 @@ def render_call_translation_ui(df: pd.DataFrame):
                         problems = insights.get('problems_identified', [])
                         if problems:
                             for i, problem in enumerate(problems, 1):
-                                st.markdown(f"**{i}. {problem.get('problem_name', 'Unknown')}**")
-                                st.markdown(f"*Evidence:* {problem.get('evidence_from_transcript', 'N/A')}")
-                                st.markdown("**Actionables:**")
-                                for action in problem.get('actionables', []):
-                                    st.markdown(f"• {action}")
-                                if problem.get('action_for_indiamart'):
-                                    st.markdown(f"**Action for IndiaMART:** {problem.get('action_for_indiamart')}")
-                                if i < len(problems):
-                                    st.markdown("---")
+                                # Problem card with styled HTML
+                                problem_name = problem.get('problem_name', 'Unknown')
+                                actionables = problem.get('actionables', [])
+                                action_im = problem.get('action_for_indiamart', '')
+                                
+                                actionable_html = ''.join([f'<li style="margin: 8px 0; padding-left: 10px; border-left: 3px solid #7c3aed;">{action}</li>' for action in actionables])
+                                
+                                im_action_html = f'<div style="margin-top: 15px; padding: 12px; background: rgba(124, 58, 237, 0.15); border-radius: 8px; border-left: 4px solid #7c3aed;"><strong>🎯 Action for IndiaMART:</strong> {action_im}</div>' if action_im and action_im.strip() and 'no mapped' not in action_im.lower() else ''
+                                
+                                st.markdown(f'''
+                                <div style="background: rgba(30, 30, 30, 0.6); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid rgba(124, 58, 237, 0.3);">
+                                    <h4 style="color: #a78bfa; margin: 0 0 15px 0; font-size: 1.2rem;">🔹 {i}. {problem_name}</h4>
+                                    <div style="color: #9ca3af; font-size: 0.95rem; margin-bottom: 10px;"><strong>Actionables:</strong></div>
+                                    <ul style="list-style: none; padding: 0; margin: 0; color: #e5e7eb;">
+                                        {actionable_html}
+                                    </ul>
+                                    {im_action_html}
+                                </div>
+                                ''', unsafe_allow_html=True)
                         else:
                             st.info("No mapped problems found in this call.")
                     
@@ -845,12 +951,20 @@ def render_call_translation_ui(df: pd.DataFrame):
                             for action in exec_tone.get('actionables_if_any', []):
                                 st.markdown(f"• {action}")
                     
-                    # Segment-Specific Insights
-                    with st.expander("📊 **Segment-Specific Insights**"):
-                        segment_notes = insights.get('segment_notes', {})
-                        st.markdown(f"**Segment:** {segment_notes.get('segment', 'N/A')}")
-                        st.markdown(f"**Business Segment:** {segment_notes.get('business_segment', 'N/A')}")
-                        st.markdown(f"**Relevance:** {segment_notes.get('relevance_to_segment', 'N/A')}")
+                    # Download Report Button (OUTSIDE the expander)
+                    st.markdown("---")
+                    report_text = generate_insights_report(
+                        insights, 
+                        call_id, 
+                        str(call_row.get('glid', ''))
+                    )
+                    st.download_button(
+                        label="📥 Download Insights Report",
+                        data=report_text,
+                        file_name=f"insights_report_{call_id}.txt",
+                        mime="text/plain",
+                        help="Download a text file containing all insights"
+                    )
                 
                 else:
                     if insights_result.get('raw_response'):
