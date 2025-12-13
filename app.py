@@ -360,7 +360,7 @@ def get_logo_base64():
 @st.cache_data
 def load_raw_data():
     """Load the raw Excel data"""
-    # Try multiple possible locations
+    # Try multiple possible locations (prioritizing datasets folder)
     paths = ["datasets/Data Voice Hackathon_Master-1.xlsx", "Data Voice Hackathon_Master-1.xlsx", "data/Data Voice Hackathon_Master-1.xlsx"]
     for path in paths:
         if os.path.exists(path):
@@ -397,7 +397,7 @@ def main():
     df = load_raw_data()
     
     if df is None:
-        st.error("Failed to load dataset. Please ensure 'Data Voice Hackathon_Master-1.xlsx' is in the current directory.")
+        st.error("Failed to load dataset. Please ensure 'Data Voice Hackathon_Master-1.xlsx' is in the 'datasets/' directory.")
         return
     
     # # Info Section

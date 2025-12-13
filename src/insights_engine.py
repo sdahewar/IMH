@@ -15,7 +15,7 @@ load_dotenv()
 
 # Configure API endpoints
 API_BASE_URL_FOR_CLIENT = os.getenv("API_BASE_URL_FOR_CLIENT", "https://imllm.intermesh.net")
-API_KEY = os.getenv("GEMINI_API_KEY", "sk-WN9SFbvmnaMyliiAlrDdRg")
+API_KEY = os.getenv("GEMINI_API_KEY", "")
 MODEL_NAME = 'google/gemini-2.5-flash-lite'  # Using allowed model for your team
 
 
