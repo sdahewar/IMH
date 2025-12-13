@@ -32,7 +32,7 @@ API_BASE_URL_FOR_CLIENT=https://imllm.intermesh.net
 ```
 
 **Get a Gemini API key:**
-1. Go to https://makersuite.google.com/app/apikey
+1. Added IndiaMART's internal LLM Gateway Gemini 2.5 Flash API Key
 2. Click "Create API Key"
 3. Copy the key and paste it in `.env`
 
@@ -192,7 +192,7 @@ self.model = genai.GenerativeModel('gemini-1.5-pro')
 - May need to refine prompt
 
 ### "Sarvam API Offline"
-- Ensure Sarvam translation server is running on port 8888
+- Ensure Sarvam Translation server is running on port 8888 
 
 ## License
 
